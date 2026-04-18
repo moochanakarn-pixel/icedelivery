@@ -27,7 +27,8 @@ if (session_id() === '') {
     @session_start();
 }
 
-$conn = mysqli_connect('localhost', 'root', 'pospwnet', 'ice_delivery', '3307');
+require_once __DIR__ . '/config.local.php';
+$conn = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
 if (!$conn) {
     die('เชื่อมต่อฐานข้อมูลไม่สำเร็จ: ' . mysqli_connect_error());
 }
