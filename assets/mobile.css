@@ -1,0 +1,61 @@
+/* Mobile-first overrides for ice delivery app */
+:root{--mobile-space:12px;--mobile-radius:16px;}
+html{-webkit-text-size-adjust:100%;}
+body{font-size:16px !important;line-height:1.45 !important;}
+a,button,input,select,textarea{-webkit-tap-highlight-color:transparent;}
+.wrapper{max-width:100% !important;padding-left:12px !important;padding-right:12px !important;}
+.header,.hero,.panel,.card,.summary,.stat,.notice,.empty{border-radius:16px !important;}
+.header,.hero{padding:18px 14px !important;margin-bottom:14px !important;}
+.header h1,.hero h1{font-size:28px !important;line-height:1.2 !important;}
+.hero p,.sub,.panel-sub,.helper,.foot,.small-note,.period-note,.muted,.meta,.mini{font-size:14px !important;line-height:1.5 !important;}
+.btn{min-height:46px !important;padding:12px 14px !important;font-size:16px !important;border-radius:12px !important;}
+.btn-sm{min-height:40px !important;padding:8px 10px !important;font-size:14px !important;}
+.input,.date-input,.select,.qty,.price{height:46px !important;font-size:17px !important;border-radius:12px !important;}
+.textarea{font-size:16px !important;border-radius:12px !important;min-height:86px !important;}
+.panel,.card,.summary,.stat{padding:14px !important;}
+.panel-title,.section h2{font-size:22px !important;line-height:1.25 !important;}
+.stats,.two-col,.layout,.toolbar,.grid,.grid2,.grid3,.control-grid,.filter-bar,.support-grid,.inline-form,.actions,.confirm-row,.drag-toolbar,.period-tabs{gap:10px !important;}
+.tag,.badge,.link-badge,.note,.mark-btn,.period-badge{font-size:13px !important;padding:6px 10px !important;}
+.name,.customer,.card h3{font-size:22px !important;line-height:1.25 !important;}
+.table th,.table td,.summary-table th,.summary-table td{padding:10px 8px !important;font-size:14px !important;}
+.value,.stat .num{font-size:28px !important;}
+.check-grid{grid-template-columns:1fr !important;}
+.sticky{padding:10px 12px calc(10px + env(safe-area-inset-bottom)) !important;}
+.sticky-inner{align-items:flex-start !important;}
+.totals{font-size:14px !important;line-height:1.55 !important;}
+.grand{font-size:18px !important;line-height:1.35 !important;}
+.page-index .wrapper{padding-bottom:118px !important;}
+.page-index .control-grid,.page-index .grid,.page-index .period-tabs{grid-template-columns:1fr !important;}
+.page-index .item-row{grid-template-columns:1fr 42px 68px 42px 78px !important;gap:6px !important;}
+.page-index .label{font-size:17px !important;}
+.page-index .mini{font-size:12px !important;}
+.page-index .pm,.page-index .qty,.page-index .price{height:42px !important;}
+.page-index .pm{font-size:22px !important;}
+.page-index .qty,.page-index .price{font-size:16px !important;}
+.page-index .card-total{font-size:17px !important;}
+.page-customers .layout,.page-customers .grid2,.page-customers .grid3,.page-customers .filter-bar,.page-customers .inline-form,.page-customers .support-grid{grid-template-columns:1fr !important;}
+.page-customers .row-top{flex-direction:column !important;}
+.page-customers .row-actions,.page-customers .danger,.page-customers .actions{display:flex !important;flex-direction:column !important;}
+.page-customers .drag-item{padding:10px 12px !important;}
+.page-driver .grid,.page-driver .actions,.page-driver .two-col{grid-template-columns:1fr !important;}
+.page-driver .meta{font-size:17px !important;}
+.page-report .stats{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+.page-report .two-col{grid-template-columns:1fr !important;}
+.page-report .list-row{padding:10px 0 !important;}
+.page-settings .actions,.page-settings .grid{grid-template-columns:1fr !important;}
+.page-settings .row{padding:12px 0 !important;}
+@media (min-width:760px){
+  .wrapper{padding-left:16px !important;padding-right:16px !important;}
+  .header h1,.hero h1{font-size:34px !important;}
+  .page-index .grid{grid-template-columns:repeat(auto-fit,minmax(320px,1fr)) !important;}
+  .page-report .stats{grid-template-columns:repeat(auto-fit,minmax(180px,1fr)) !important;}
+}
+@media (min-width:1100px){
+  .page-index .control-grid{grid-template-columns:1.1fr .9fr .8fr !important;}
+  .page-index .period-tabs{grid-template-columns:repeat(3,1fr) !important;}
+  .page-customers .layout{grid-template-columns:1fr 1.35fr !important;}
+  .page-customers .filter-bar{grid-template-columns:1.2fr .8fr .8fr auto auto !important;}
+  .page-customers .inline-form{grid-template-columns:1.3fr .7fr .7fr .9fr !important;}
+  .page-customers .support-grid{grid-template-columns:1fr 1fr 1fr !important;}
+  .page-report .two-col{grid-template-columns:1fr 1fr !important;}
+}
