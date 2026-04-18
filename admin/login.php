@@ -5,7 +5,8 @@ if (!is_file($rootConfig)) {
 }
 include_once $rootConfig;
 
-if (admin_is_logged_in()) {
+// ป้องกัน redirect loop ถ้า session พัง
+if (session_id() !== '' && admin_is_logged_in()) {
     admin_auth_redirect('index.php');
 }
 

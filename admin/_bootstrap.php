@@ -62,8 +62,12 @@ $assetBase = is_file(dirname(__DIR__) . '/assets/mobile.css') ? '../assets' : 'a
     </div>
 
     <div class="admin-nav">
-        <?php foreach ($nav as $file => $label) { ?>
-            <a href="<?php echo h($file); ?>" class="<?php echo basename((string)$file) === $current ? 'active' : ''; ?>"><?php echo h($label); ?></a>
+        <?php foreach ($nav as $file => $label) {
+            // เปรียบเทียบแค่ชื่อไฟล์ปลายทาง ไม่ใช้ path เต็ม
+            $navBasename = basename((string)$file);
+            $isActive = $navBasename === $current;
+        ?>
+            <a href="<?php echo h($file); ?>" class="<?php echo $isActive ? 'active' : ''; ?>"><?php echo h($label); ?></a>
         <?php } ?>
     </div>
 

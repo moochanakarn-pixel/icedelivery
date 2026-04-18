@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $uploadResults = line_handle_menu_image_uploads($_FILES['role_image']);
         foreach ($uploadResults as $uploadRole => $uploadResult) {
             $prefix = line_role_label_th($uploadRole) . ': ';
-            $imageMessages[] = $prefix . ($uploadResult['message'] ?? '');
+            $imageMessages[] = $prefix . (isset($uploadResult['message']) ? $uploadResult['message'] : '');
             if (empty($uploadResult['ok'])) {
                 set_flash_message('error', implode(' | ', $imageMessages));
                 admin_auth_redirect('line_richmenu.php');
