@@ -445,3 +445,48 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-tag-pending { color: var(--m-warning, #f59e0b) !important; }
 .status-tag-delivered { color: var(--m-primary, #3b82f6) !important; }
 .status-tag-paid { color: var(--m-success, #22c55e) !important; }
+
+/* KPI progress bar */
+.driver-progress-wrap {
+  height: 6px; background: var(--m-border, #2a3650);
+  border-radius: 3px; margin: -4px 0 12px; overflow: hidden;
+}
+.driver-progress-bar {
+  height: 100%; background: var(--m-success, #22c55e);
+  border-radius: 3px; transition: width .4s;
+}
+
+/* New order banner */
+.driver-new-order-banner {
+  display: none; background: var(--m-warning, #f59e0b);
+  color: #000; font-weight: 700; text-align: center;
+  padding: 12px; border-radius: 12px; margin-bottom: 12px;
+  cursor: pointer; touch-action: manipulation;
+}
+.driver-new-order-banner.show { display: block; }
+
+/* History view */
+.driver-history-item {
+  background: var(--m-card, #1a2035);
+  border: 1.5px solid var(--m-border, #2a3650);
+  border-radius: 14px; padding: 14px; margin-bottom: 10px;
+}
+.driver-history-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.driver-history-name { font-weight: 700; font-size: 1rem; color: var(--m-text, #e2e8f0); }
+.driver-history-amount { font-weight: 700; color: var(--m-success, #22c55e); white-space: nowrap; }
+.driver-history-meta { font-size: .8rem; color: var(--m-muted, #64748b); margin-top: 4px; }
+.driver-history-photo-badge {
+  display: inline-block; font-size: .75rem; padding: 2px 8px;
+  background: var(--m-bg2, #161b22); border-radius: 20px;
+  color: var(--m-primary, #3b82f6); margin-top: 6px;
+}
+
+/* GPS note */
+.driver-gps-note {
+  font-size: .82rem; color: var(--m-muted, #64748b);
+  padding: 6px 0 2px; text-align: center;
+}
+.driver-nearby-subtitle {
+  font-size: .8rem; color: var(--m-muted, #64748b);
+  text-align: center; margin-top: 4px;
+}

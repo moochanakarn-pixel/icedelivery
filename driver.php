@@ -148,6 +148,29 @@ if (isset($_SESSION['ice_saved_notice']) && is_array($_SESSION['ice_saved_notice
     if ($savedDate !== '') { $message .= ' • ' . $savedDate; }
 }
 
+if (isset($_GET['action']) && $_GET['action'] === 'check_order_count') {
+    $todayEsc = mysqli_real_escape_string($conn, date('Y-m-d'));
+    $periodEsc = mysqli_real_escape_string($conn, normalize_period(isset($_GET['order_period']) ? $_GET['order_period'] : default_period_code()));
+    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM orders WHERE order_date='{$todayEsc}' AND order_period='{$periodEsc}'"));
+    driver_json_response(true, '', array('count' => (int)$row['cnt']));
+}
+
+if (isset($_GET['action']) && $_GET['action'] === 'driver_history') {
+    $sql = "SELECT orders.id, orders.order_date, orders.order_period, orders.status,
+                   orders.delivered_qty, orders.delivery_photo, orders.delivered_at,
+                   customers.name,
+                   COALESCE(SUM(order_items.qty * order_items.price), 0) AS total_amount
+            FROM orders
+            LEFT JOIN customers ON customers.id = orders.customer_id
+            LEFT JOIN order_items ON order_items.order_id = orders.id
+            WHERE orders.status IN ('delivered','paid') AND orders.delivered_at IS NOT NULL
+            GROUP BY orders.id
+            ORDER BY orders.delivered_at DESC
+            LIMIT 50";
+    $rows = fetch_all_rows(@mysqli_query($conn, $sql));
+    driver_json_response(true, '', array('history' => $rows));
+}
+
 if (isset($_GET['action']) && $_GET['action'] === 'nearby_stores') {
     $lat = isset($_GET['lat']) ? (float)$_GET['lat'] : 0;
     $lng = isset($_GET['lng']) ? (float)$_GET['lng'] : 0;
@@ -254,13 +277,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
 $periods = order_periods();
 $selected_period = normalize_period(isset($_GET['order_period']) ? $_GET['order_period'] : default_period_code());
 $selected_view = isset($_GET['view']) ? trim((string)$_GET['view']) : 'today';
-if (!in_array($selected_view, array('today', 'outstanding', 'tomorrow'), true)) {
+if (!in_array($selected_view, array('today', 'outstanding', 'tomorrow', 'history'), true)) {
     $selected_view = 'today';
 }
 $view_titles = array(
     'today' => 'งานส่งวันนี้',
     'outstanding' => 'ค้างเก็บเงิน',
     'tomorrow' => 'รายการพรุ่งนี้',
+    'history' => 'ประวัติการส่ง',
 );
 $today = date('Y-m-d');
 $tomorrow = date('Y-m-d', strtotime('+1 day'));
@@ -270,6 +294,31 @@ $outstandingGroups = driver_fetch_outstanding_groups($conn, $selected_period);
 $todayPending = driver_count_by_status($todayOrders, 'pending');
 $todayDelivered = driver_count_by_status($todayOrders, 'delivered');
 $todayPaid = driver_count_by_status($todayOrders, 'paid');
+$todayTotal = count($todayOrders);
+$todayCollected = 0;
+foreach ($todayOrders as $order) {
+    if ((string)(isset($order['status']) ? $order['status'] : 'pending') === 'paid') {
+        $todayCollected += (float)$order['total_amount'];
+    }
+}
+$gpsCustomerCount = (int)mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM customers WHERE latitude IS NOT NULL AND longitude IS NOT NULL"))['cnt'];
+
+$historyOrders = array();
+if ($selected_view === 'history') {
+    $historySql = "SELECT orders.id, orders.order_date, orders.order_period, orders.status,
+                          orders.delivered_qty, orders.delivery_photo, orders.delivered_at,
+                          customers.name,
+                          COALESCE(SUM(order_items.qty * order_items.price), 0) AS total_amount
+                   FROM orders
+                   LEFT JOIN customers ON customers.id = orders.customer_id
+                   LEFT JOIN order_items ON order_items.order_id = orders.id
+                   WHERE orders.status IN ('delivered','paid') AND orders.delivered_at IS NOT NULL
+                   GROUP BY orders.id
+                   ORDER BY orders.delivered_at DESC
+                   LIMIT 50";
+    $historyOrders = fetch_all_rows(@mysqli_query($conn, $historySql));
+}
+
 $outstandingCount = 0;
 $outstandingAmount = 0;
 foreach ($outstandingGroups as $group) {
@@ -307,14 +356,22 @@ foreach ($outstandingGroups as $group) {
             <a class="driver-tab<?php echo $selected_view === 'today' ? ' active' : ''; ?>" href="?view=today&order_period=<?php echo h($selected_period); ?>">วันนี้</a>
             <a class="driver-tab<?php echo $selected_view === 'outstanding' ? ' active' : ''; ?>" href="?view=outstanding&order_period=<?php echo h($selected_period); ?>">ค้างเก็บเงิน</a>
             <a class="driver-tab<?php echo $selected_view === 'tomorrow' ? ' active' : ''; ?>" href="?view=tomorrow&order_period=<?php echo h($selected_period); ?>">พรุ่งนี้</a>
+            <a class="driver-tab<?php echo $selected_view === 'history' ? ' active' : ''; ?>" href="?view=history&order_period=<?php echo h($selected_period); ?>">ประวัติ</a>
         </div>
     </div>
+
+    <div class="driver-new-order-banner" id="newOrderBanner" onclick="location.reload()">มีออเดอร์ใหม่ กดเพื่อรีเฟรช</div>
 
     <?php if ($message !== '') { ?><div class="notice <?php echo h($message_type); ?>"><?php echo h($message); ?></div><?php } ?>
 
     <?php if ($selected_view === 'today') { ?>
     <div class="driver-nearby-wrap">
-        <button id="nearbyBtn" class="btn btn-light btn-block">📍 เช็คร้านใกล้ฉัน (GPS)</button>
+        <?php if ($gpsCustomerCount === 0) { ?>
+            <div class="driver-gps-note">ยังไม่มีร้านที่ตั้งค่า GPS (ตั้งค่าในหน้าแอดมิน)</div>
+        <?php } else { ?>
+            <button id="nearbyBtn" class="btn btn-light btn-block">📍 เช็คร้านใกล้ฉัน (GPS)</button>
+            <div class="driver-nearby-subtitle">มีร้านที่ตั้งค่า GPS แล้ว <?php echo $gpsCustomerCount; ?> ร้าน</div>
+        <?php } ?>
         <div id="nearbyResult" style="display:none" class="driver-nearby-result"></div>
     </div>
     <?php } ?>
@@ -325,13 +382,20 @@ foreach ($outstandingGroups as $group) {
             <div class="driver-kpi-value"><?php echo number_format($todayPending); ?></div>
         </div>
         <div class="driver-kpi-card">
-            <div class="driver-kpi-label">รอเก็บเงิน</div>
+            <div class="driver-kpi-label">ส่งแล้ว</div>
             <div class="driver-kpi-value"><?php echo number_format($todayDelivered); ?></div>
         </div>
         <div class="driver-kpi-card">
-            <div class="driver-kpi-label">ยอดค้าง</div>
-            <div class="driver-kpi-value"><?php echo number_format($outstandingAmount); ?></div>
+            <div class="driver-kpi-label">เก็บเงินแล้ว</div>
+            <div class="driver-kpi-value"><?php echo number_format($todayPaid); ?></div>
         </div>
+        <div class="driver-kpi-card">
+            <div class="driver-kpi-label">ยอดรับวันนี้</div>
+            <div class="driver-kpi-value" style="color:var(--m-success,#22c55e)"><?php echo driver_format_money($todayCollected); ?></div>
+        </div>
+    </div>
+    <div class="driver-progress-wrap">
+        <div class="driver-progress-bar" style="width: <?php echo floor($todayPaid / max(1, $todayTotal) * 100); ?>%"></div>
     </div>
 
     <?php if ($selected_view === 'today') { ?>
@@ -480,6 +544,49 @@ foreach ($outstandingGroups as $group) {
         <?php } ?>
     </div>
     <?php } ?>
+    <?php if ($selected_view === 'history') { ?>
+    <div class="section">
+        <div class="driver-section-head">
+            <div>
+                <h2>ประวัติการส่ง</h2>
+                <div class="driver-subhead">50 รายการล่าสุด</div>
+            </div>
+        </div>
+        <?php if (!$historyOrders) { ?>
+            <div class="empty">ยังไม่มีประวัติการส่ง</div>
+        <?php } else { ?>
+            <div>
+                <?php foreach ($historyOrders as $hOrder) {
+                    $hDeliveredAt = isset($hOrder['delivered_at']) ? $hOrder['delivered_at'] : '';
+                    $hDateDisplay = '';
+                    if ($hDeliveredAt !== '') {
+                        $ts = strtotime($hDeliveredAt);
+                        if ($ts) {
+                            $thMonth = array('','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.');
+                            $d = (int)date('j', $ts);
+                            $m = (int)date('n', $ts);
+                            $y = (int)date('Y', $ts) + 543;
+                            $t = date('H:i', $ts);
+                            $hDateDisplay = $d . ' ' . $thMonth[$m] . ' ' . $y . ' ' . $t . ' น.';
+                        }
+                    }
+                    $hasPhoto = !empty($hOrder['delivery_photo']);
+                ?>
+                <div class="driver-history-item">
+                    <div class="driver-history-top">
+                        <div>
+                            <div class="driver-history-name"><?php echo h($hOrder['name']); ?></div>
+                            <div class="driver-history-meta"><?php echo $hDateDisplay !== '' ? h($hDateDisplay) : '—'; ?> • ส่ง <?php echo (int)(isset($hOrder['delivered_qty']) ? $hOrder['delivered_qty'] : 0); ?> ชิ้น</div>
+                            <span class="driver-history-photo-badge"><?php echo $hasPhoto ? '📷 มีรูป' : 'ไม่มีรูป'; ?></span>
+                        </div>
+                        <div class="driver-history-amount"><?php echo driver_format_money($hOrder['total_amount']); ?></div>
+                    </div>
+                </div>
+                <?php } ?>
+            </div>
+        <?php } ?>
+    </div>
+    <?php } ?>
 </div>
 <div class="driver-bottom-bar">
     <div class="driver-bottom-item"><strong id="bottomPending"><?php echo number_format($todayPending); ?></strong><span>รอส่ง</span></div>
@@ -517,6 +624,37 @@ foreach ($outstandingGroups as $group) {
   var FETCH_URL = 'driver.php?view=<?php echo h($selected_view); ?>&order_period=<?php echo h($selected_period); ?>';
   var csrfToken = <?php echo json_encode(csrf_token(), JSON_UNESCAPED_UNICODE); ?>;
   var selectedView = <?php echo json_encode($selected_view, JSON_UNESCAPED_UNICODE); ?>;
+  var selectedPeriod = <?php echo json_encode($selected_period, JSON_UNESCAPED_UNICODE); ?>;
+
+  // ---- Fetch with timeout ----
+  function fetchWithTimeout(url, opts, ms) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function(){ ctrl.abort(); }, ms || 15000);
+    opts.signal = ctrl.signal;
+    return fetch(url, opts).finally(function(){ clearTimeout(timer); });
+  }
+
+  // ---- Compress image ----
+  async function compressImage(file, maxPx, quality) {
+    return new Promise(function(resolve) {
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      img.onload = function() {
+        var w = img.width, h = img.height;
+        if (w > maxPx || h > maxPx) {
+          var ratio = Math.min(maxPx/w, maxPx/h);
+          w = Math.round(w*ratio); h = Math.round(h*ratio);
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(function(blob) { resolve(blob || file); }, 'image/jpeg', quality);
+      };
+      img.onerror = function() { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
 
   // ---- ป้องกันกดซ้ำ global lock ----
   var _inFlight = {};
@@ -621,7 +759,7 @@ foreach ($outstandingGroups as $group) {
     fd.append('status', newStatus);
     fd.append('csrf_token', csrfToken);
     try {
-      var res = await fetch(FETCH_URL, {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'});
+      var res = await fetchWithTimeout(FETCH_URL, {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'}, 15000);
       var data = await res.json();
       if(!res.ok||!data||!data.ok) throw new Error(data&&data.message?data.message:'อัปเดตไม่สำเร็จ');
       updateCard(card, newStatus);
@@ -629,7 +767,8 @@ foreach ($outstandingGroups as $group) {
       showToast('บันทึกเรียบร้อย ✓');
     } catch(err){
       setCardLoading(card, false);
-      showToast(err&&err.message?err.message:'อัปเดตไม่สำเร็จ', true);
+      var msg = (err && err.name === 'AbortError') ? 'หมดเวลา กรุณาลองใหม่' : (err&&err.message?err.message:'อัปเดตไม่สำเร็จ');
+      showToast(msg, true);
     } finally {
       unlockId(id);
     }
@@ -723,9 +862,12 @@ foreach ($outstandingGroups as $group) {
     if(deliverGpsLat!==null) fd.append('lat', deliverGpsLat);
     if(deliverGpsLng!==null) fd.append('lng', deliverGpsLng);
     var photoFile = deliverPhoto.files[0];
-    if(photoFile) fd.append('photo', photoFile);
+    if(photoFile) {
+      var compressed = await compressImage(photoFile, 1280, 0.82);
+      fd.append('photo', compressed, 'delivery.jpg');
+    }
     try {
-      var res = await fetch(FETCH_URL, {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'});
+      var res = await fetchWithTimeout(FETCH_URL, {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'}, 15000);
       var data = await res.json();
       if(!res.ok||!data||!data.ok) throw new Error(data&&data.message?data.message:'บันทึกไม่สำเร็จ');
       deliverModal.classList.remove('is-open');
@@ -735,7 +877,8 @@ foreach ($outstandingGroups as $group) {
       moveToNextCard(savedCard);
       showToast('ส่งแล้วเรียบร้อย ✓');
     } catch(err){
-      showToast(err&&err.message?err.message:'บันทึกไม่สำเร็จ', true);
+      var msg = (err && err.name === 'AbortError') ? 'หมดเวลา กรุณาลองใหม่' : (err&&err.message?err.message:'บันทึกไม่สำเร็จ');
+      showToast(msg, true);
     } finally {
       _modalSubmitting = false;
       deliverConfirmBtn.disabled = false;
@@ -767,7 +910,7 @@ foreach ($outstandingGroups as $group) {
         nearbyBtn.textContent = 'กำลังโหลด...';
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         try {
-          var res = await fetch('driver.php?action=nearby_stores&lat='+lat+'&lng='+lng+'&order_period=<?php echo h($selected_period); ?>', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}});
+          var res = await fetchWithTimeout('driver.php?action=nearby_stores&lat='+lat+'&lng='+lng+'&order_period=<?php echo h($selected_period); ?>', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000);
           var data = await res.json();
           if(!data||!data.ok) throw new Error(data.message||'เกิดข้อผิดพลาด');
           var stores = data.stores||[];
@@ -783,7 +926,8 @@ foreach ($outstandingGroups as $group) {
           nearbyResult.innerHTML = html;
           nearbyResult.style.display = 'block';
         } catch(err){
-          showToast(err.message||'เกิดข้อผิดพลาด', true);
+          var msg = (err && err.name === 'AbortError') ? 'หมดเวลา กรุณาลองใหม่' : (err.message||'เกิดข้อผิดพลาด');
+          showToast(msg, true);
         } finally {
           _nearbyBusy = false;
           nearbyBtn.disabled = false;
@@ -797,6 +941,26 @@ foreach ($outstandingGroups as $group) {
       }, {timeout:10000, maximumAge:60000});
     });
   }
+
+  // ---- แจ้งเตือนออเดอร์ใหม่ (polling) ----
+  var newOrderBanner = document.getElementById('newOrderBanner');
+  var _initialOrderCount = -1;
+  (function initOrderCount(){
+    fetchWithTimeout('driver.php?action=check_order_count&order_period='+encodeURIComponent(selectedPeriod), {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000)
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d&&d.ok) _initialOrderCount = d.count; })
+      .catch(function(){});
+  })();
+  setInterval(function(){
+    fetchWithTimeout('driver.php?action=check_order_count&order_period='+encodeURIComponent(selectedPeriod), {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d&&d.ok && _initialOrderCount >= 0 && d.count > _initialOrderCount){
+          if(newOrderBanner) newOrderBanner.classList.add('show');
+        }
+      })
+      .catch(function(){});
+  }, 120000);
 
 })();
 </script>
