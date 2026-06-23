@@ -403,10 +403,20 @@ a{text-decoration:none}
  .sticky-actions{width:100%}
  .sticky-actions .btn{width:100%}
 }
+.top-nav{display:flex;gap:6px;padding:10px 0 4px;overflow-x:auto;scrollbar-width:none}
+.top-nav::-webkit-scrollbar{display:none}
+.top-nav a{flex-shrink:0;padding:7px 14px;border-radius:999px;border:1.5px solid #c7d8ea;background:#f7fbff;color:#55708a;font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap;transition:.15s}
+.top-nav a.active{background:#0b7dda;border-color:#0b7dda;color:#fff}
 </style>
 </head>
 <body class="page-index">
 <div class="wrapper">
+    <nav class="top-nav">
+      <a href="index.php" class="active">📝 คีย์ออเดอร์</a>
+      <a href="driver.php">🚚 คนส่ง</a>
+      <a href="report.php">📊 รายงาน</a>
+      <a href="customers.php">👥 ลูกค้า</a>
+    </nav>
     <div id="pageNoticeWrap">
     <?php if ($message !== '') { ?>
         <div class="notice <?php echo h($message_type); ?>" id="pageNotice"><?php echo h($message); ?></div>

@@ -382,6 +382,13 @@ if ($selected_view === 'history') {
 </head>
 <body class="page-driver page-driver-v2">
 <div class="wrapper">
+    <style>.top-nav{display:flex;gap:6px;padding:10px 0 4px;overflow-x:auto;scrollbar-width:none}.top-nav::-webkit-scrollbar{display:none}.top-nav a{flex-shrink:0;padding:7px 14px;border-radius:999px;border:1.5px solid #c7d8ea;background:#f7fbff;color:#55708a;font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}.top-nav a.active{background:#0b7dda;border-color:#0b7dda;color:#fff}</style>
+    <nav class="top-nav">
+      <a href="index.php">📝 คีย์ออเดอร์</a>
+      <a href="driver.php" class="active">🚚 คนส่ง</a>
+      <a href="report.php">📊 รายงาน</a>
+      <a href="customers.php">👥 ลูกค้า</a>
+    </nav>
     <div class="driver-screen-title">
         <div class="driver-screen-kicker">หน้าคนส่ง</div>
         <h1><?php echo h(isset($view_titles[$selected_view]) ? $view_titles[$selected_view] : 'หน้าคนส่งน้ำแข็ง'); ?></h1>

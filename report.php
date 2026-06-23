@@ -76,7 +76,14 @@ $line_summary_liff_id = defined('LINE_REPORT_SHARE_LIFF_ID') ? trim((string)LINE
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>รายงานยอดขายน้ำแข็ง</title>
 <link rel="stylesheet" href="assets/mobile.css">
-<link rel="stylesheet" href="assets/app.css?v=20260405c">
+<link rel="stylesheet" href="assets/app.css?v=20260623">
+<style>
+.app-nav{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);border-top:1px solid #dfeaf6;display:flex;z-index:90;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -4px 16px rgba(0,0,0,.07)}
+.app-nav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;color:#7a96ae;font-size:11px;font-weight:700;text-decoration:none;gap:3px;transition:color .15s}
+.app-nav a.active{color:#0b7dda}
+.app-nav a svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.wrapper{padding-bottom:80px!important}
+</style>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0b7dda">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -239,5 +246,11 @@ $line_summary_liff_id = defined('LINE_REPORT_SHARE_LIFF_ID') ? trim((string)LINE
     }
 })();
 </script>
+<nav class="app-nav">
+  <a href="index.php"><svg viewBox="0 0 24 24"><path d="M9 11l3-8 3 8M5 19h14"/><line x1="12" y1="3" x2="12" y2="19"/></svg>คีย์ออเดอร์</a>
+  <a href="driver.php"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>คนส่ง</a>
+  <a href="report.php" class="active"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>รายงาน</a>
+  <a href="customers.php"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>ลูกค้า</a>
+</nav>
 </body>
 </html>
