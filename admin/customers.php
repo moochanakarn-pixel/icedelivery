@@ -254,14 +254,15 @@ admin_render_header('ลูกค้า', 'เพิ่ม แก้ไข แ�
                                 </div>
                             </div>
                         </div>
-                        <div class="btn-row">
+                        <div class="btn-row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
                             <button type="submit" name="save_customer" value="1" class="btn btn-primary">บันทึก</button>
+                            <button type="button" class="btn btn-danger" onclick="submitDelete(<?php echo $cid; ?>)">ลบลูกค้า</button>
                         </div>
                     </form>
-                    <form method="post" onsubmit="return confirm('ยืนยันการลบลูกค้ารายนี้?');" style="margin-top:8px">
+                    <form method="post" id="delform_<?php echo $cid; ?>" onsubmit="return confirm('ยืนยันการลบลูกค้ารายนี้?');" style="display:none">
                         <?php echo csrf_input(); ?>
                         <input type="hidden" name="customer_id" value="<?php echo $cid; ?>">
-                        <button type="submit" name="delete_customer" value="1" class="btn btn-danger">ลบลูกค้า</button>
+                        <input type="hidden" name="delete_customer" value="1">
                     </form>
                 </div>
             <?php } ?>
@@ -419,6 +420,12 @@ function useMyLocation() {
         setPin(lt, ln);
         _map.setView([lt, ln], 17);
     }, function() { alert('ไม่สามารถดึงตำแหน่งได้ กรุณาอนุญาตการเข้าถึง GPS'); });
+}
+
+function submitDelete(id) {
+    if (confirm('ยืนยันการลบลูกค้ารายนี้?')) {
+        document.getElementById('delform_' + id).submit();
+    }
 }
 
 // กด Enter ในช่องค้นหาแผนที่
