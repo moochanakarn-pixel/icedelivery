@@ -681,49 +681,80 @@ if ($selected_view === 'history') {
   var csrfToken = <?php echo json_encode(csrf_token(), JSON_UNESCAPED_UNICODE); ?>;
   var selectedView = <?php echo json_encode($selected_view, JSON_UNESCAPED_UNICODE); ?>;
 
-  // ---- AJAX Tab Switching ----
+  // ---- AJAX Tab Switching with cache ----
   var tabBody = document.getElementById('tab-body');
   var h1Title = document.querySelector('.driver-screen-title h1');
+  var tabCache = {};       // view → {html, title, outstanding_amount, today_pending, today_delivered}
+  var tabCacheTime = {};   // view → timestamp
+  var TAB_CACHE_TTL = 90000; // 90 วิ
+  // cache initial tab (already rendered by PHP)
+  if (tabBody) {
+    tabCache[selectedView] = {
+      html: tabBody.innerHTML,
+      title: h1Title ? h1Title.textContent : '',
+      outstanding_amount: <?php echo $outstandingAmount; ?>,
+      today_pending: <?php echo $todayPending; ?>,
+      today_delivered: <?php echo $todayDelivered; ?>
+    };
+    tabCacheTime[selectedView] = Date.now();
+  }
+
+  function applyTabData(view, data) {
+    selectedView = view;
+    FETCH_URL = 'driver.php?view=' + view;
+    if (tabBody) { tabBody.innerHTML = data.html; tabBody.style.opacity = ''; tabBody.style.pointerEvents = ''; }
+    if (h1Title && data.title) h1Title.textContent = data.title;
+    history.pushState(null, '', '?view=' + view);
+    var bp = document.getElementById('bottomPending');
+    var bd = document.getElementById('bottomDelivered');
+    var bo = document.getElementById('bottomOutstanding');
+    if (bp) bp.textContent = (data.today_pending||0).toLocaleString('th-TH');
+    if (bd) bd.textContent = (data.today_delivered||0).toLocaleString('th-TH');
+    if (bo) bo.textContent = Math.round(data.outstanding_amount||0).toLocaleString('th-TH');
+    var newToggle = document.getElementById('toggleHideDone');
+    if (newToggle) {
+      hideDoneToggle = newToggle;
+      newToggle.addEventListener('change', applyHideDone);
+      applyHideDone();
+    }
+  }
+
   document.querySelectorAll('.driver-tab').forEach(function(link) {
     link.addEventListener('click', function(e) {
       var view = (new URL(link.href, location.href)).searchParams.get('view') || 'today';
-      if (view === selectedView) return; // already on this tab
+      if (view === selectedView) return;
       e.preventDefault();
-      // update active state immediately
       document.querySelectorAll('.driver-tab').forEach(function(l){ l.classList.remove('active'); });
       link.classList.add('active');
+
+      // ใช้ cache ถ้ายังไม่หมดอายุ
+      var cached = tabCache[view];
+      if (cached && tabCacheTime[view] && (Date.now() - tabCacheTime[view]) < TAB_CACHE_TTL) {
+        applyTabData(view, cached);
+        return;
+      }
+
       if (tabBody) { tabBody.style.opacity = '0.4'; tabBody.style.pointerEvents = 'none'; }
       fetchWithTimeout('driver.php?view='+view+'&ajax_tab=1', {
         credentials: 'same-origin',
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
       }, 20000).then(function(res){ return res.json(); }).then(function(data) {
         if (!data || !data.ok) throw new Error('โหลดไม่สำเร็จ');
-        selectedView = view;
-        FETCH_URL = 'driver.php?view=' + view;
-        if (tabBody) { tabBody.innerHTML = data.html; tabBody.style.opacity = ''; tabBody.style.pointerEvents = ''; }
-        if (h1Title && data.title) h1Title.textContent = data.title;
-        history.pushState(null, '', '?view=' + view);
-        // update bottom bar
-        var bp = document.getElementById('bottomPending');
-        var bd = document.getElementById('bottomDelivered');
-        var bo = document.getElementById('bottomOutstanding');
-        if (bp) bp.textContent = (data.today_pending||0).toLocaleString('th-TH');
-        if (bd) bd.textContent = (data.today_delivered||0).toLocaleString('th-TH');
-        if (bo) bo.textContent = Math.round(data.outstanding_amount||0).toLocaleString('th-TH');
-        // re-attach hide-done toggle for today tab
-        var newToggle = document.getElementById('toggleHideDone');
-        if (newToggle) {
-          hideDoneToggle = newToggle;
-          newToggle.addEventListener('change', applyHideDone);
-          applyHideDone();
-        }
+        tabCache[view] = data;
+        tabCacheTime[view] = Date.now();
+        applyTabData(view, data);
       }).catch(function(err) {
         if (tabBody) { tabBody.style.opacity = ''; tabBody.style.pointerEvents = ''; }
-        // fallback: full reload
         location.href = 'driver.php?view=' + view;
       });
     });
   });
+
+  // เมื่อ action สำเร็จ ให้ invalidate cache ของ today
+  function invalidateTodayCache() {
+    delete tabCache['today'];
+    delete tabCacheTime['today'];
+  }
 
   // ---- Fetch with timeout ----
   function fetchWithTimeout(url, opts, ms) {
@@ -864,6 +895,7 @@ if ($selected_view === 'history') {
       updateCard(card, newStatus);
       moveToNextCard(card);
       showToast('บันทึกเรียบร้อย ✓');
+      invalidateTodayCache();
     } catch(err){
       setCardLoading(card, false);
       var msg = (err && err.name === 'AbortError') ? 'หมดเวลา กรุณาลองใหม่' : (err&&err.message?err.message:'อัปเดตไม่สำเร็จ');
@@ -981,6 +1013,7 @@ if ($selected_view === 'history') {
       updateCard(savedCard, 'delivered');
       moveToNextCard(savedCard);
       showToast('ส่งแล้วเรียบร้อย ✓');
+      invalidateTodayCache();
     } catch(err){
       var msg = (err && err.name === 'AbortError') ? 'หมดเวลา กรุณาลองใหม่' : (err&&err.message?err.message:'บันทึกไม่สำเร็จ');
       showToast(msg, true);

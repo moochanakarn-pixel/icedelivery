@@ -46,7 +46,7 @@ if (!defined('LINE_REPORT_SHARE_LIFF_ID')) {
 }
 
 if (!defined('ICE_SCHEMA_VERSION')) {
-    define('ICE_SCHEMA_VERSION', '2026-04-05-2');
+    define('ICE_SCHEMA_VERSION', '2026-06-23-1');
 }
 
 function h($text) {
@@ -346,6 +346,9 @@ function ensure_schema_updates($conn) {
     }
     if (!index_exists($conn, 'order_items', 'idx_order_items_order_id')) {
         @mysqli_query($conn, "CREATE INDEX idx_order_items_order_id ON order_items(order_id)");
+    }
+    if (!index_exists($conn, 'orders', 'idx_orders_delivered_at')) {
+        @mysqli_query($conn, "CREATE INDEX idx_orders_delivered_at ON orders(delivered_at DESC)");
     }
 
     if (!table_exists($conn, 'app_settings')) {
