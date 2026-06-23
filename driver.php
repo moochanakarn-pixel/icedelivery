@@ -596,8 +596,12 @@ foreach ($outstandingGroups as $group) {
       <label class="deliver-label">จำนวนที่ส่ง (ถัง / ก้อน)</label>
       <input type="number" id="deliverQty" class="deliver-input" min="0" inputmode="numeric" placeholder="เช่น 10">
       <label class="deliver-label" style="margin-top:12px">ถ่ายรูปหลักฐาน <span class="deliver-optional">(ไม่บังคับ)</span></label>
-      <label class="deliver-camera-btn" for="deliverPhoto">📷 เปิดกล้องถ่ายรูป</label>
-      <input type="file" id="deliverPhoto" accept="image/*" capture="environment" style="display:none">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="deliver-camera-btn" for="deliverPhotoCamera">📷 ถ่ายรูป</label>
+        <label class="deliver-camera-btn" for="deliverPhotoGallery" style="background:#f3f4f6;color:#333">🖼️ เลือกจากคลัง</label>
+      </div>
+      <input type="file" id="deliverPhotoCamera" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="deliverPhotoGallery" accept="image/*" style="display:none">
       <div id="deliverPhotoPreview" style="display:none;margin-top:8px">
         <img id="deliverPhotoImg" style="max-width:100%;border-radius:8px;border:2px solid #e0e0e0">
         <button id="deliverPhotoClear" class="deliver-photo-clear">✕ ลบรูป</button>
@@ -770,7 +774,8 @@ foreach ($outstandingGroups as $group) {
   var deliverModal = document.getElementById('deliverModal');
   var deliverModalName = document.getElementById('deliverModalName');
   var deliverQty = document.getElementById('deliverQty');
-  var deliverPhoto = document.getElementById('deliverPhoto');
+  var deliverPhoto = document.getElementById('deliverPhotoCamera');
+  var deliverPhotoGallery = document.getElementById('deliverPhotoGallery');
   var deliverPhotoImg = document.getElementById('deliverPhotoImg');
   var deliverPhotoPreview = document.getElementById('deliverPhotoPreview');
   var deliverPhotoClear = document.getElementById('deliverPhotoClear');
@@ -790,6 +795,7 @@ foreach ($outstandingGroups as $group) {
     deliverModalName.textContent = name;
     deliverQty.value = '';
     deliverPhoto.value = '';
+    deliverPhotoGallery.value = '';
     deliverPhotoImg.src = '';
     deliverPhotoPreview.style.display = 'none';
     deliverGpsLat = null; deliverGpsLng = null;
@@ -824,15 +830,19 @@ foreach ($outstandingGroups as $group) {
     currentDeliverCard = null;
   }
 
-  deliverPhoto.addEventListener('change', function(){
-    var file = deliverPhoto.files[0];
+  function onPhotoSelected(input) {
+    var file = input.files[0];
     if(!file) return;
+    if(input !== deliverPhoto) { deliverPhoto.value = ''; }
+    if(input !== deliverPhotoGallery) { deliverPhotoGallery.value = ''; }
     var reader = new FileReader();
     reader.onload = function(ev){ deliverPhotoImg.src=ev.target.result; deliverPhotoPreview.style.display='block'; };
     reader.readAsDataURL(file);
-  });
+  }
+  deliverPhoto.addEventListener('change', function(){ onPhotoSelected(deliverPhoto); });
+  deliverPhotoGallery.addEventListener('change', function(){ onPhotoSelected(deliverPhotoGallery); });
   deliverPhotoClear.addEventListener('click', function(){
-    deliverPhoto.value=''; deliverPhotoImg.src=''; deliverPhotoPreview.style.display='none';
+    deliverPhoto.value=''; deliverPhotoGallery.value=''; deliverPhotoImg.src=''; deliverPhotoPreview.style.display='none';
   });
   deliverCancelBtn.addEventListener('click', closeDeliverModal);
   deliverModal.addEventListener('click', function(e){ if(e.target===deliverModal) closeDeliverModal(); });
@@ -853,7 +863,7 @@ foreach ($outstandingGroups as $group) {
     if(deliverQty.value!=='') fd.append('qty', deliverQty.value);
     if(deliverGpsLat!==null) fd.append('lat', deliverGpsLat);
     if(deliverGpsLng!==null) fd.append('lng', deliverGpsLng);
-    var photoFile = deliverPhoto.files[0];
+    var photoFile = (deliverPhoto.files[0]) || (deliverPhotoGallery.files[0]);
     if(photoFile) {
       var compressed = await compressImage(photoFile, 1280, 0.82);
       fd.append('photo', compressed, 'delivery.jpg');
