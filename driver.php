@@ -781,7 +781,7 @@ if ($selected_view === 'history') {
   }
 
   function buildActionHtml(id, name, status){
-    if(status==='paid') return '<span class="btn-done btn-block">✓ เสร็จแล้ว</span>';
+    if(status==='paid') return '<span class="btn-disabled btn-block">เสร็จแล้ว</span>';
     if(status==='pending'){
       var n = name ? name.replace(/"/g,'&quot;') : '';
       return '<button class="btn btn-send btn-block js-open-deliver-modal" data-id="'+id+'" data-name="'+n+'">ส่งแล้ว</button>';

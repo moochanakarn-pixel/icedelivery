@@ -46,7 +46,7 @@ foreach (array_chunk($tokens, 500) as $chunk) {
     curl_close($ch);
     if ($curlErr === 0 && $result !== false) {
         $fcmRes = json_decode($result, true);
-        $sent += isset($fcmRes['success']) ? (int)$fcmRes['success'] : count($chunk);
+        $sent += isset($fcmRes['success']) ? (int)$fcmRes['success'] : 0;
     }
 }
 admin_log_action('send_push', "ส่ง push notification: {$title} ({$sent} อุปกรณ์)");

@@ -59,8 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $search = trim(isset($_GET['q']) ? $_GET['q'] : '');
 $where = '';
 if ($search !== '') {
-    $safe = mysqli_real_escape_string($conn, $search);
-    $where = "WHERE display_name LIKE '%{$safe}%' OR line_user_id LIKE '%{$safe}%'";
+    $safeLike = mysqli_real_escape_string($conn, str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search));
+    $where = "WHERE display_name LIKE '%{$safeLike}%' ESCAPE '\\\\' OR line_user_id LIKE '%{$safeLike}%' ESCAPE '\\\\'";
 }
 
 $rows = fetch_all_rows(@mysqli_query($conn, "SELECT * FROM line_users {$where} ORDER BY is_active DESC, COALESCE(last_seen_at, updated_at, created_at) DESC, id DESC LIMIT 300"));
