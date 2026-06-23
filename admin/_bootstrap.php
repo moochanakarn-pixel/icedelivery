@@ -192,6 +192,3 @@ function admin_render_footer($note) {
 </html>
 <?php
 }
-<?php
-}
-?>
