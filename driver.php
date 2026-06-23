@@ -378,6 +378,7 @@ if ($selected_view === 'history') {
 <meta name="theme-color" content="#0b7dda">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>.tab-spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,.15);border-top-color:#0b7dda;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}@keyframes spin{to{transform:rotate(360deg)}}</style>
 </head>
 <body class="page-driver page-driver-v2">
 <div class="wrapper">
@@ -734,7 +735,11 @@ if ($selected_view === 'history') {
         return;
       }
 
-      if (tabBody) { tabBody.style.opacity = '0.4'; tabBody.style.pointerEvents = 'none'; }
+      if (tabBody) {
+        tabBody.innerHTML = '<div style="padding:40px 0;text-align:center;color:#888"><div class="tab-spinner"></div><div style="margin-top:12px;font-size:14px">กำลังโหลด...</div></div>';
+        tabBody.style.opacity = '';
+        tabBody.style.pointerEvents = 'none';
+      }
       fetchWithTimeout('driver.php?view='+view+'&ajax_tab=1', {
         credentials: 'same-origin',
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -744,7 +749,7 @@ if ($selected_view === 'history') {
         tabCacheTime[view] = Date.now();
         applyTabData(view, data);
       }).catch(function(err) {
-        if (tabBody) { tabBody.style.opacity = ''; tabBody.style.pointerEvents = ''; }
+        if (tabBody) { tabBody.innerHTML = ''; tabBody.style.pointerEvents = ''; }
         location.href = 'driver.php?view=' + view;
       });
     });
