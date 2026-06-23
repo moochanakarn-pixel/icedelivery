@@ -21,7 +21,7 @@ function admin_nav_items() {
         'manage' => array(
             'label' => 'จัดการ',
             'items' => array(
-                '../customers.php'  => array('icon' => 'users',    'label' => 'ลูกค้า'),
+                'customers.php'     => array('icon' => 'users',    'label' => 'ลูกค้า'),
                 '../driver.php'     => array('icon' => 'truck',    'label' => 'คนส่ง'),
                 'admin_users.php'   => array('icon' => 'shield',   'label' => 'ผู้ดูแล'),
             ),

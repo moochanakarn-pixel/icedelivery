@@ -1,5 +1,7 @@
 <?php
-include 'config.php';
+// ย้ายไปรวมกับ admin/customers.php แล้ว
+header('Location: admin/customers.php');
+exit;
 
 $message = '';
 $message_type = 'success';

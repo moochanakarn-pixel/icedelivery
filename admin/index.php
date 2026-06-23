@@ -49,7 +49,7 @@ admin_render_header('ภาพรวมหลังบ้าน', 'รวมง�
             <a class="btn btn-primary" href="../index.php">คีย์ออเดอร์</a>
             <a class="btn btn-dark" href="../driver.php">หน้าคนส่ง</a>
             <a class="btn btn-light" href="../report.php">รายงานหลัก</a>
-            <a class="btn btn-light" href="../customers.php">ลูกค้า</a>
+            <a class="btn btn-light" href="customers.php">ลูกค้า</a>
             <a class="btn btn-light" href="login.php">หน้า login หลังบ้าน</a>
             <a class="btn btn-light" href="line_richmenu.php">กำหนด LINE rich</a>
         </div>
