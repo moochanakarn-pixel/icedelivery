@@ -1,4 +1,5 @@
 <?php
+define('SKIP_SCHEMA_UPDATES', true);
 include 'config.php';
 
 $message = '';
@@ -285,20 +286,30 @@ $view_titles = array(
 );
 $today = date('Y-m-d');
 $tomorrow = date('Y-m-d', strtotime('+1 day'));
+// โหลดเฉพาะข้อมูลที่ tab ปัจจุบันต้องการ
 $todayOrders = driver_fetch_orders_by_date_period($conn, $today);
-$tomorrowOrders = driver_fetch_orders_by_date_period($conn, $tomorrow);
-$outstandingGroups = driver_fetch_outstanding_groups($conn);
-$todayPending = driver_count_by_status($todayOrders, 'pending');
+$tomorrowOrders = ($selected_view === 'tomorrow') ? driver_fetch_orders_by_date_period($conn, $tomorrow) : array();
+$outstandingGroups = ($selected_view === 'outstanding') ? driver_fetch_outstanding_groups($conn) : array();
+
+$todayPending   = driver_count_by_status($todayOrders, 'pending');
 $todayDelivered = driver_count_by_status($todayOrders, 'delivered');
-$todayPaid = driver_count_by_status($todayOrders, 'paid');
-$todayTotal = count($todayOrders);
+$todayPaid      = driver_count_by_status($todayOrders, 'paid');
+$todayTotal     = count($todayOrders);
 $todayCollected = 0;
 foreach ($todayOrders as $order) {
     if ((string)(isset($order['status']) ? $order['status'] : 'pending') === 'paid') {
         $todayCollected += (float)$order['total_amount'];
     }
 }
-$_gpsRes = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM customers WHERE latitude IS NOT NULL AND longitude IS NOT NULL");
+
+// summary query เบาสำหรับ bottom bar — ไม่ต้อง JOIN ทั้งหมด
+$_todayEsc = mysqli_real_escape_string($conn, $today);
+$_outRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt, COALESCE(SUM(oi.qty*oi.price),0) AS amt FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.paid=0 AND o.order_date < '{$_todayEsc}'");
+$_outRow = $_outRes ? mysqli_fetch_assoc($_outRes) : null;
+$outstandingCount  = $_outRow ? (int)$_outRow['cnt'] : 0;
+$outstandingAmount = $_outRow ? (float)$_outRow['amt'] : 0;
+
+$_gpsRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM customers WHERE latitude IS NOT NULL AND longitude IS NOT NULL");
 $gpsCustomerCount = $_gpsRes ? (int)(mysqli_fetch_assoc($_gpsRes)['cnt'] ?? 0) : 0;
 
 $historyOrders = array();
@@ -315,13 +326,6 @@ if ($selected_view === 'history') {
                    ORDER BY orders.delivered_at DESC
                    LIMIT 50";
     $historyOrders = fetch_all_rows(@mysqli_query($conn, $historySql));
-}
-
-$outstandingCount = 0;
-$outstandingAmount = 0;
-foreach ($outstandingGroups as $group) {
-    $outstandingCount += (int)$group['count'];
-    $outstandingAmount += (float)$group['total_amount'];
 }
 ?>
 <!DOCTYPE html>

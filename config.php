@@ -341,6 +341,12 @@ function ensure_schema_updates($conn) {
     if (!index_exists($conn, 'orders', 'idx_orders_status')) {
         @mysqli_query($conn, "CREATE INDEX idx_orders_status ON orders(status, order_date)");
     }
+    if (!index_exists($conn, 'orders', 'idx_orders_paid_date')) {
+        @mysqli_query($conn, "CREATE INDEX idx_orders_paid_date ON orders(paid, order_date)");
+    }
+    if (!index_exists($conn, 'order_items', 'idx_order_items_order_id')) {
+        @mysqli_query($conn, "CREATE INDEX idx_order_items_order_id ON order_items(order_id)");
+    }
 
     if (!table_exists($conn, 'app_settings')) {
         @mysqli_query($conn, "CREATE TABLE app_settings (
