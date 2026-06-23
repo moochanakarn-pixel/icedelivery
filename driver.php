@@ -700,25 +700,6 @@ if ($selected_view === 'history') {
     tabCacheTime[selectedView] = Date.now();
   }
 
-  function applyTabData(view, data) {
-    selectedView = view;
-    FETCH_URL = 'driver.php?view=' + view;
-    if (tabBody) { tabBody.innerHTML = data.html; tabBody.style.opacity = ''; tabBody.style.pointerEvents = ''; }
-    if (h1Title && data.title) h1Title.textContent = data.title;
-    history.pushState(null, '', '?view=' + view);
-    var bp = document.getElementById('bottomPending');
-    var bd = document.getElementById('bottomDelivered');
-    var bo = document.getElementById('bottomOutstanding');
-    if (bp) bp.textContent = (data.today_pending||0).toLocaleString('th-TH');
-    if (bd) bd.textContent = (data.today_delivered||0).toLocaleString('th-TH');
-    if (bo) bo.textContent = Math.round(data.outstanding_amount||0).toLocaleString('th-TH');
-    var newToggle = document.getElementById('toggleHideDone');
-    if (newToggle) {
-      hideDoneToggle = newToggle;
-      newToggle.addEventListener('change', applyHideDone);
-      applyHideDone();
-    }
-  }
 
   document.querySelectorAll('.driver-tab').forEach(function(link) {
     link.addEventListener('click', function(e) {
@@ -727,31 +708,68 @@ if ($selected_view === 'history') {
       e.preventDefault();
       document.querySelectorAll('.driver-tab').forEach(function(l){ l.classList.remove('active'); });
       link.classList.add('active');
+      // update selectedView ทันทีเพื่อป้องกัน race condition
+      var prevView = selectedView;
+      selectedView = view;
+      FETCH_URL = 'driver.php?view=' + view;
+      history.pushState(null, '', '?view=' + view);
+      if (h1Title) {
+        var titles = {today:'งานส่งวันนี้',outstanding:'ค้างเก็บเงิน',tomorrow:'รายการพรุ่งนี้',history:'ประวัติการส่ง'};
+        h1Title.textContent = titles[view] || view;
+      }
 
       // ใช้ cache ถ้ายังไม่หมดอายุ
       var cached = tabCache[view];
       if (cached && tabCacheTime[view] && (Date.now() - tabCacheTime[view]) < TAB_CACHE_TTL) {
-        applyTabData(view, cached);
+        if (tabBody) { tabBody.innerHTML = cached.html; tabBody.style.pointerEvents = ''; }
+        var bp = document.getElementById('bottomPending');
+        var bd = document.getElementById('bottomDelivered');
+        var bo = document.getElementById('bottomOutstanding');
+        if (bp) bp.textContent = (cached.today_pending||0).toLocaleString('th-TH');
+        if (bd) bd.textContent = (cached.today_delivered||0).toLocaleString('th-TH');
+        if (bo) bo.textContent = Math.round(cached.outstanding_amount||0).toLocaleString('th-TH');
+        var newToggle = document.getElementById('toggleHideDone');
+        if (newToggle) { hideDoneToggle = newToggle; newToggle.addEventListener('change', applyHideDone); applyHideDone(); }
         return;
       }
 
+      // cancel in-flight request ถ้ามี
+      if (window._tabAbortCtrl) { try { window._tabAbortCtrl.abort(); } catch(e){} }
+      window._tabAbortCtrl = new AbortController();
+      var myCtrl = window._tabAbortCtrl;
+      var requestedView = view;
+
       if (tabBody) {
         tabBody.innerHTML = '<div style="padding:40px 0;text-align:center;color:#888"><div class="tab-spinner"></div><div style="margin-top:12px;font-size:14px">กำลังโหลด...</div></div>';
-        tabBody.style.opacity = '';
         tabBody.style.pointerEvents = 'none';
       }
-      fetchWithTimeout('driver.php?view='+view+'&ajax_tab=1', {
+      var timer = setTimeout(function(){ myCtrl.abort(); }, 20000);
+      fetch('driver.php?view='+requestedView+'&ajax_tab=1', {
         credentials: 'same-origin',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-      }, 20000).then(function(res){ return res.json(); }).then(function(data) {
-        if (!data || !data.ok) throw new Error('โหลดไม่สำเร็จ');
-        tabCache[view] = data;
-        tabCacheTime[view] = Date.now();
-        applyTabData(view, data);
-      }).catch(function(err) {
-        if (tabBody) { tabBody.innerHTML = ''; tabBody.style.pointerEvents = ''; }
-        location.href = 'driver.php?view=' + view;
-      });
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        signal: myCtrl.signal
+      }).finally(function(){ clearTimeout(timer); })
+        .then(function(res){ return res.json(); })
+        .then(function(data) {
+          if (myCtrl.signal.aborted) return; // cancelled
+          if (selectedView !== requestedView) return; // user switched again
+          if (!data || !data.ok) throw new Error('โหลดไม่สำเร็จ');
+          tabCache[requestedView] = data;
+          tabCacheTime[requestedView] = Date.now();
+          if (tabBody) { tabBody.innerHTML = data.html; tabBody.style.pointerEvents = ''; }
+          var bp = document.getElementById('bottomPending');
+          var bd = document.getElementById('bottomDelivered');
+          var bo = document.getElementById('bottomOutstanding');
+          if (bp) bp.textContent = (data.today_pending||0).toLocaleString('th-TH');
+          if (bd) bd.textContent = (data.today_delivered||0).toLocaleString('th-TH');
+          if (bo) bo.textContent = Math.round(data.outstanding_amount||0).toLocaleString('th-TH');
+          var newToggle = document.getElementById('toggleHideDone');
+          if (newToggle) { hideDoneToggle = newToggle; newToggle.addEventListener('change', applyHideDone); applyHideDone(); }
+        }).catch(function(err) {
+          if (err && err.name === 'AbortError') return;
+          if (tabBody) { tabBody.innerHTML = ''; tabBody.style.pointerEvents = ''; }
+          location.href = 'driver.php?view=' + requestedView;
+        });
     });
   });
 
