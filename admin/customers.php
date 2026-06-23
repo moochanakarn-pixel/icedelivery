@@ -118,8 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $search = trim(isset($_GET['q']) ? $_GET['q'] : '');
 $where = array();
 if ($search !== '') {
-    $safeSearch = mysqli_real_escape_string($conn, $search);
-    $where[] = "(name LIKE '%{$safeSearch}%' OR phone LIKE '%{$safeSearch}%')";
+    $safeLike = mysqli_real_escape_string($conn, str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search));
+    $where[] = "(name LIKE '%{$safeLike}%' ESCAPE '\\\\' OR phone LIKE '%{$safeLike}%' ESCAPE '\\\\')";
 }
 $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 $orderSql = customers_order_by_sql();

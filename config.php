@@ -175,10 +175,7 @@ function csrf_validate($token = null) {
 
 function admin_password_hash($password) {
     $password = (string)$password;
-    if (function_exists('password_hash')) {
-        return 'bcrypt:' . password_hash($password, PASSWORD_BCRYPT);
-    }
-    return 'sha1:' . sha1($password);
+    return 'bcrypt:' . password_hash($password, PASSWORD_BCRYPT);
 }
 
 function admin_password_verify($password, $storedHash) {
