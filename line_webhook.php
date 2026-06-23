@@ -43,6 +43,12 @@ foreach ($data['events'] as $event) {
         }
     }
 
+    if ($eventType === 'unfollow') {
+        $safeUid = mysqli_real_escape_string($conn, $userId);
+        @mysqli_query($conn, "UPDATE line_users SET is_active = 0, updated_at = NOW(), last_seen_at = NOW(), last_event_type = 'unfollow' WHERE line_user_id = '{$safeUid}' LIMIT 1");
+        continue;
+    }
+
     $role = line_find_role($userId);
     $displayName = '';
     $needProfile = ($eventType === 'follow');

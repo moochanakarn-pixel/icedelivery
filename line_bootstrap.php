@@ -760,13 +760,14 @@ function line_upsert_user($lineUserId, $displayName, $role, $eventType) {
     $eventEsc = line_db_escape($eventType);
     $nowEsc = line_db_escape($now);
 
+    $isActiveUpdate = ($eventType === 'follow') ? "is_active = 1," : '';
     $sql = "
         INSERT INTO line_users(line_user_id, display_name, role, is_active, created_at, updated_at, last_seen_at, last_event_type)
         VALUES('{$userEsc}', '{$nameEsc}', '{$roleEsc}', 1, '{$nowEsc}', '{$nowEsc}', '{$nowEsc}', '{$eventEsc}')
         ON DUPLICATE KEY UPDATE
             display_name = CASE WHEN '{$nameEsc}' <> '' THEN '{$nameEsc}' ELSE display_name END,
             role = CASE WHEN role IS NULL OR role = '' THEN '{$roleEsc}' ELSE role END,
-            is_active = 1,
+            {$isActiveUpdate}
             updated_at = '{$nowEsc}',
             last_seen_at = '{$nowEsc}',
             last_event_type = '{$eventEsc}'
