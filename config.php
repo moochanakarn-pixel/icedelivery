@@ -543,8 +543,7 @@ function maps_enabled() {
 }
 
 function rounds_enabled() {
-    global $conn;
-    return app_setting_enabled($conn, 'enable_delivery_rounds');
+    return false;
 }
 
 function route_labels_enabled() {

@@ -47,28 +47,27 @@ function driver_format_money($amount) {
     return number_format((float)$amount) . ' บาท';
 }
 
-function driver_fetch_orders_by_date_period($conn, $date, $period) {
+function driver_fetch_orders_by_date_period($conn, $date, $period = '') {
     $dateEsc = mysqli_real_escape_string($conn, $date);
-    $periodEsc = mysqli_real_escape_string($conn, $period);
     $orderBy = customers_order_by_sql('customers') . ', orders.id ASC';
     $sql = "SELECT orders.id, orders.customer_id, orders.order_date, orders.order_period, orders.status, orders.delivery_note,
-                   customers.name, customers.phone, customers.route, customers.route_order, customers.preferred_round,
+                   customers.name, customers.phone, customers.route, customers.route_order,
                    customers.map_url, customers.delivery_point_url,
                    COALESCE(SUM(order_items.qty * order_items.price), 0) AS total_amount
             FROM orders
             LEFT JOIN customers ON customers.id = orders.customer_id
             LEFT JOIN order_items ON order_items.order_id = orders.id
-            WHERE orders.order_date = '{$dateEsc}' AND orders.order_period = '{$periodEsc}'
+            WHERE orders.order_date = '{$dateEsc}'
             GROUP BY orders.id
             ORDER BY {$orderBy}";
     return fetch_all_rows(@mysqli_query($conn, $sql));
 }
 
-function driver_fetch_outstanding_groups($conn, $period) {
+function driver_fetch_outstanding_groups($conn, $period = '') {
     $todayEsc = mysqli_real_escape_string($conn, date('Y-m-d'));
     $orderBy = customers_order_by_sql('customers') . ', orders.order_date ASC, orders.id ASC';
     $sql = "SELECT orders.id, orders.customer_id, orders.order_date, orders.order_period, orders.status, orders.delivery_note,
-                   customers.name, customers.phone, customers.route, customers.route_order, customers.preferred_round,
+                   customers.name, customers.phone, customers.route, customers.route_order,
                    customers.map_url, customers.delivery_point_url,
                    COALESCE(SUM(order_items.qty * order_items.price), 0) AS total_amount
             FROM orders
@@ -150,8 +149,7 @@ if (isset($_SESSION['ice_saved_notice']) && is_array($_SESSION['ice_saved_notice
 
 if (isset($_GET['action']) && $_GET['action'] === 'check_order_count') {
     $todayEsc = mysqli_real_escape_string($conn, date('Y-m-d'));
-    $periodEsc = mysqli_real_escape_string($conn, normalize_period(isset($_GET['order_period']) ? $_GET['order_period'] : default_period_code()));
-    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM orders WHERE order_date='{$todayEsc}' AND order_period='{$periodEsc}'"));
+    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM orders WHERE order_date='{$todayEsc}'"));
     driver_json_response(true, '', array('count' => (int)$row['cnt']));
 }
 
@@ -178,7 +176,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'nearby_stores') {
         driver_json_response(false, 'ไม่มีพิกัด GPS');
     }
     $todayEsc = mysqli_real_escape_string($conn, date('Y-m-d'));
-    $periodEsc = mysqli_real_escape_string($conn, normalize_period(isset($_GET['order_period']) ? $_GET['order_period'] : default_period_code()));
     $latF = round($lat, 7);
     $lngF = round($lng, 7);
     $sql = "SELECT customers.id, customers.name, customers.latitude, customers.longitude,
@@ -189,7 +186,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'nearby_stores') {
                      SIN(RADIANS({$latF})) * SIN(RADIANS(customers.latitude))))) AS distance_m
             FROM customers
             LEFT JOIN orders ON orders.customer_id = customers.id
-                AND orders.order_date = '{$todayEsc}' AND orders.order_period = '{$periodEsc}'
+                AND orders.order_date = '{$todayEsc}'
             WHERE customers.latitude IS NOT NULL AND customers.longitude IS NOT NULL
             HAVING distance_m <= 300
             ORDER BY distance_m ASC";
@@ -274,8 +271,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
     }
 }
 
-$periods = order_periods();
-$selected_period = normalize_period(isset($_GET['order_period']) ? $_GET['order_period'] : default_period_code());
 $selected_view = isset($_GET['view']) ? trim((string)$_GET['view']) : 'today';
 if (!in_array($selected_view, array('today', 'outstanding', 'tomorrow', 'history'), true)) {
     $selected_view = 'today';
@@ -288,9 +283,9 @@ $view_titles = array(
 );
 $today = date('Y-m-d');
 $tomorrow = date('Y-m-d', strtotime('+1 day'));
-$todayOrders = driver_fetch_orders_by_date_period($conn, $today, $selected_period);
-$tomorrowOrders = driver_fetch_orders_by_date_period($conn, $tomorrow, $selected_period);
-$outstandingGroups = driver_fetch_outstanding_groups($conn, $selected_period);
+$todayOrders = driver_fetch_orders_by_date_period($conn, $today);
+$tomorrowOrders = driver_fetch_orders_by_date_period($conn, $tomorrow);
+$outstandingGroups = driver_fetch_outstanding_groups($conn);
 $todayPending = driver_count_by_status($todayOrders, 'pending');
 $todayDelivered = driver_count_by_status($todayOrders, 'delivered');
 $todayPaid = driver_count_by_status($todayOrders, 'paid');
@@ -344,19 +339,14 @@ foreach ($outstandingGroups as $group) {
     <div class="driver-screen-title">
         <div class="driver-screen-kicker">หน้าคนส่ง</div>
         <h1><?php echo h(isset($view_titles[$selected_view]) ? $view_titles[$selected_view] : 'หน้าคนส่งน้ำแข็ง'); ?></h1>
-        <div class="driver-screen-meta"><?php echo h(get_period_label($selected_period)); ?> • กดทีละร้านได้เลย</div>
+        <div class="driver-screen-meta">กดทีละร้านได้เลย</div>
     </div>
     <div class="driver-topbar">
-        <div class="round-quick-links">
-            <?php foreach ($periods as $code => $label) { ?>
-                <a class="round-link<?php echo $selected_period === $code ? ' active' : ''; ?>" href="?view=<?php echo h($selected_view); ?>&order_period=<?php echo h($code); ?>"><?php echo h(str_replace('รอบ ', '', $label)); ?></a>
-            <?php } ?>
-        </div>
         <div class="driver-view-tabs">
-            <a class="driver-tab<?php echo $selected_view === 'today' ? ' active' : ''; ?>" href="?view=today&order_period=<?php echo h($selected_period); ?>">วันนี้</a>
-            <a class="driver-tab<?php echo $selected_view === 'outstanding' ? ' active' : ''; ?>" href="?view=outstanding&order_period=<?php echo h($selected_period); ?>">ค้างเก็บเงิน</a>
-            <a class="driver-tab<?php echo $selected_view === 'tomorrow' ? ' active' : ''; ?>" href="?view=tomorrow&order_period=<?php echo h($selected_period); ?>">พรุ่งนี้</a>
-            <a class="driver-tab<?php echo $selected_view === 'history' ? ' active' : ''; ?>" href="?view=history&order_period=<?php echo h($selected_period); ?>">ประวัติ</a>
+            <a class="driver-tab<?php echo $selected_view === 'today' ? ' active' : ''; ?>" href="?view=today">วันนี้</a>
+            <a class="driver-tab<?php echo $selected_view === 'outstanding' ? ' active' : ''; ?>" href="?view=outstanding">ค้างเก็บเงิน</a>
+            <a class="driver-tab<?php echo $selected_view === 'tomorrow' ? ' active' : ''; ?>" href="?view=tomorrow">พรุ่งนี้</a>
+            <a class="driver-tab<?php echo $selected_view === 'history' ? ' active' : ''; ?>" href="?view=history">ประวัติ</a>
         </div>
     </div>
 
@@ -403,7 +393,7 @@ foreach ($outstandingGroups as $group) {
         <div class="driver-section-head">
             <div>
                 <h2>งานส่งวันนี้</h2>
-                <div class="driver-subhead"><?php echo h($today); ?> • <?php echo h(get_period_label($selected_period)); ?> • ต่อ 1 ร้าน = 1 ปุ่มหลัก</div>
+                <div class="driver-subhead"><?php echo h($today); ?> • ต่อ 1 ร้าน = 1 ปุ่มหลัก</div>
             </div>
             <label class="driver-filter-toggle"><input type="checkbox" id="toggleHideDone" checked> <span>ซ่อนที่เสร็จแล้ว</span></label>
         </div>
@@ -456,7 +446,7 @@ foreach ($outstandingGroups as $group) {
         <div class="driver-section-head">
             <div>
                 <h2>รายการพรุ่งนี้</h2>
-                <div class="driver-subhead"><?php echo h($tomorrow); ?> • <?php echo h(get_period_label($selected_period)); ?></div>
+                <div class="driver-subhead"><?php echo h($tomorrow); ?></div>
             </div>
         </div>
         <?php if (!$tomorrowOrders) { ?>
@@ -491,7 +481,7 @@ foreach ($outstandingGroups as $group) {
         <div class="driver-section-head">
             <div>
                 <h2>ค้างเก็บเงิน</h2>
-                <div class="driver-subhead"><?php echo h(get_period_label($selected_period)); ?> • รวมตามลูกค้าเพื่อให้ดูง่ายขึ้น</div>
+                <div class="driver-subhead">รวมตามลูกค้าเพื่อให้ดูง่ายขึ้น</div>
             </div>
         </div>
         <?php if (!$outstandingGroups) { ?>
@@ -621,10 +611,9 @@ foreach ($outstandingGroups as $group) {
 <script>
 (function(){
   'use strict';
-  var FETCH_URL = 'driver.php?view=<?php echo h($selected_view); ?>&order_period=<?php echo h($selected_period); ?>';
+  var FETCH_URL = 'driver.php?view=<?php echo h($selected_view); ?>';
   var csrfToken = <?php echo json_encode(csrf_token(), JSON_UNESCAPED_UNICODE); ?>;
   var selectedView = <?php echo json_encode($selected_view, JSON_UNESCAPED_UNICODE); ?>;
-  var selectedPeriod = <?php echo json_encode($selected_period, JSON_UNESCAPED_UNICODE); ?>;
 
   // ---- Fetch with timeout ----
   function fetchWithTimeout(url, opts, ms) {
@@ -910,7 +899,7 @@ foreach ($outstandingGroups as $group) {
         nearbyBtn.textContent = 'กำลังโหลด...';
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         try {
-          var res = await fetchWithTimeout('driver.php?action=nearby_stores&lat='+lat+'&lng='+lng+'&order_period=<?php echo h($selected_period); ?>', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000);
+          var res = await fetchWithTimeout('driver.php?action=nearby_stores&lat='+lat+'&lng='+lng, {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000);
           var data = await res.json();
           if(!data||!data.ok) throw new Error(data.message||'เกิดข้อผิดพลาด');
           var stores = data.stores||[];
@@ -946,13 +935,13 @@ foreach ($outstandingGroups as $group) {
   var newOrderBanner = document.getElementById('newOrderBanner');
   var _initialOrderCount = -1;
   (function initOrderCount(){
-    fetchWithTimeout('driver.php?action=check_order_count&order_period='+encodeURIComponent(selectedPeriod), {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000)
+    fetchWithTimeout('driver.php?action=check_order_count', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000)
       .then(function(r){ return r.json(); })
       .then(function(d){ if(d&&d.ok) _initialOrderCount = d.count; })
       .catch(function(){});
   })();
   setInterval(function(){
-    fetchWithTimeout('driver.php?action=check_order_count&order_period='+encodeURIComponent(selectedPeriod), {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000)
+    fetchWithTimeout('driver.php?action=check_order_count', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000)
       .then(function(r){ return r.json(); })
       .then(function(d){
         if(d&&d.ok && _initialOrderCount >= 0 && d.count > _initialOrderCount){

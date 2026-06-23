@@ -10,8 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (isset($_POST['save_flags'])) {
         set_app_setting($conn, 'enable_map_features', isset($_POST['enable_map_features']));
-        set_app_setting($conn, 'enable_delivery_rounds', isset($_POST['enable_delivery_rounds']));
-        set_app_setting($conn, 'enable_route_labels', isset($_POST['enable_route_labels']));
+set_app_setting($conn, 'enable_route_labels', isset($_POST['enable_route_labels']));
         set_app_setting($conn, 'enable_delivery_order', isset($_POST['enable_delivery_order']));
         set_app_setting($conn, 'enable_quick_tools', isset($_POST['enable_quick_tools']));
         admin_log_action('save_settings', 'บันทึกการตั้งค่าฟีเจอร์');
@@ -38,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $mapEnabled = maps_enabled();
-$roundsEnabled = rounds_enabled();
 $routeLabelsEnabled = route_labels_enabled();
 $deliveryOrderEnabled = delivery_order_enabled();
 $quickToolsEnabled = quick_tools_enabled();
@@ -58,16 +56,6 @@ admin_render_header('ตั้งค่าหลังบ้าน', 'รวม�
                     </div>
                     <label class="toggle-switch">
                         <input type="checkbox" name="enable_map_features" value="1" <?php echo $mapEnabled ? 'checked' : ''; ?> onchange="autoSaveFlags()">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                <div class="toggle-item">
-                    <div class="toggle-info">
-                        <div class="toggle-title">🔄 รอบการส่ง</div>
-                        <div class="toggle-desc">แบ่งการส่งเป็นหลายรอบต่อวัน (r1–r7)</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" name="enable_delivery_rounds" value="1" <?php echo $roundsEnabled ? 'checked' : ''; ?> onchange="autoSaveFlags()">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
