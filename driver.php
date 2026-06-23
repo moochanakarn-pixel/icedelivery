@@ -277,6 +277,9 @@ $selected_view = isset($_GET['view']) ? trim((string)$_GET['view']) : 'today';
 if (!in_array($selected_view, array('today', 'outstanding', 'tomorrow', 'history'), true)) {
     $selected_view = 'today';
 }
+$is_ajax_tab = isset($_GET['ajax_tab']) && $_GET['ajax_tab'] === '1' && $is_ajax_request;
+// buffer เต็มหน้าเพื่อให้ discard ได้เมื่อ return JSON
+if ($is_ajax_tab) { ob_start(); }
 $view_titles = array(
     'today' => 'งานส่งวันนี้',
     'outstanding' => 'ค้างเก็บเงิน',
@@ -326,14 +329,24 @@ if ($selected_view === 'today') {
     }
 }
 
-// summary สำหรับ bottom bar — index paid+order_date รองรับแล้ว
-$_outRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt, COALESCE(SUM(oi.qty*oi.price),0) AS amt FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.paid=0 AND o.order_date < '{$_todayEsc}'");
-$_outRow = $_outRes ? mysqli_fetch_assoc($_outRes) : null;
-$outstandingCount  = $_outRow ? (int)$_outRow['cnt'] : 0;
-$outstandingAmount = $_outRow ? (float)$_outRow['amt'] : 0;
+// summary สำหรับ bottom bar
+if ($selected_view === 'outstanding' && $outstandingGroups) {
+    // คำนวณจากข้อมูลที่โหลดมาแล้ว ไม่ต้อง query เพิ่ม
+    $outstandingCount = 0; $outstandingAmount = 0;
+    foreach ($outstandingGroups as $_og) { $outstandingCount += $_og['count']; $outstandingAmount += $_og['total_amount']; }
+} else {
+    $_outRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt, COALESCE(SUM(oi.qty*oi.price),0) AS amt FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.paid=0 AND o.order_date < '{$_todayEsc}'");
+    $_outRow = $_outRes ? mysqli_fetch_assoc($_outRes) : null;
+    $outstandingCount  = $_outRow ? (int)$_outRow['cnt'] : 0;
+    $outstandingAmount = $_outRow ? (float)$_outRow['amt'] : 0;
+}
 
-$_gpsRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM customers WHERE latitude IS NOT NULL AND longitude IS NOT NULL");
-$gpsCustomerCount = $_gpsRes ? (int)(mysqli_fetch_assoc($_gpsRes)['cnt'] ?? 0) : 0;
+// GPS count ใช้เฉพาะ today tab
+$gpsCustomerCount = 0;
+if ($selected_view === 'today') {
+    $_gpsRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM customers WHERE latitude IS NOT NULL AND longitude IS NOT NULL");
+    $gpsCustomerCount = $_gpsRes ? (int)(mysqli_fetch_assoc($_gpsRes)['cnt'] ?? 0) : 0;
+}
 
 $historyOrders = array();
 if ($selected_view === 'history') {
@@ -384,6 +397,7 @@ if ($selected_view === 'history') {
 
     <?php if ($message !== '') { ?><div class="notice <?php echo h($message_type); ?>"><?php echo h($message); ?></div><?php } ?>
 
+    <div id="tab-body"><?php if ($is_ajax_tab) { ob_start(); } ?>
     <?php if ($selected_view === 'today') { ?>
     <div class="driver-nearby-wrap">
         <?php if ($gpsCustomerCount === 0) { ?>
@@ -607,6 +621,21 @@ if ($selected_view === 'history') {
         <?php } ?>
     </div>
     <?php } ?>
+    <?php if ($is_ajax_tab) {
+        $tabHtml = ob_get_clean(); // inner buffer (tab content only)
+        ob_end_clean();            // outer buffer (full page HTML junk)
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array(
+            'ok' => true,
+            'html' => $tabHtml,
+            'title' => isset($view_titles[$selected_view]) ? $view_titles[$selected_view] : '',
+            'outstanding_amount' => $outstandingAmount,
+            'today_pending' => $todayPending,
+            'today_delivered' => $todayDelivered,
+        ), JSON_UNESCAPED_UNICODE);
+        exit;
+    } ?>
+    </div><!-- #tab-body -->
 </div>
 <div class="driver-bottom-bar">
     <div class="driver-bottom-item"><strong id="bottomPending"><?php echo number_format($todayPending); ?></strong><span>รอส่ง</span></div>
@@ -648,6 +677,50 @@ if ($selected_view === 'history') {
   var FETCH_URL = 'driver.php?view=<?php echo h($selected_view); ?>';
   var csrfToken = <?php echo json_encode(csrf_token(), JSON_UNESCAPED_UNICODE); ?>;
   var selectedView = <?php echo json_encode($selected_view, JSON_UNESCAPED_UNICODE); ?>;
+
+  // ---- AJAX Tab Switching ----
+  var tabBody = document.getElementById('tab-body');
+  var h1Title = document.querySelector('.driver-screen-title h1');
+  document.querySelectorAll('.driver-tab').forEach(function(link) {
+    link.addEventListener('click', function(e) {
+      var view = (new URL(link.href, location.href)).searchParams.get('view') || 'today';
+      if (view === selectedView) return; // already on this tab
+      e.preventDefault();
+      // update active state immediately
+      document.querySelectorAll('.driver-tab').forEach(function(l){ l.classList.remove('active'); });
+      link.classList.add('active');
+      if (tabBody) { tabBody.style.opacity = '0.4'; tabBody.style.pointerEvents = 'none'; }
+      fetchWithTimeout('driver.php?view='+view+'&ajax_tab=1', {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      }, 20000).then(function(res){ return res.json(); }).then(function(data) {
+        if (!data || !data.ok) throw new Error('โหลดไม่สำเร็จ');
+        selectedView = view;
+        FETCH_URL = 'driver.php?view=' + view;
+        if (tabBody) { tabBody.innerHTML = data.html; tabBody.style.opacity = ''; tabBody.style.pointerEvents = ''; }
+        if (h1Title && data.title) h1Title.textContent = data.title;
+        history.pushState(null, '', '?view=' + view);
+        // update bottom bar
+        var bp = document.getElementById('bottomPending');
+        var bd = document.getElementById('bottomDelivered');
+        var bo = document.getElementById('bottomOutstanding');
+        if (bp) bp.textContent = (data.today_pending||0).toLocaleString('th-TH');
+        if (bd) bd.textContent = (data.today_delivered||0).toLocaleString('th-TH');
+        if (bo) bo.textContent = Math.round(data.outstanding_amount||0).toLocaleString('th-TH');
+        // re-attach hide-done toggle for today tab
+        var newToggle = document.getElementById('toggleHideDone');
+        if (newToggle) {
+          hideDoneToggle = newToggle;
+          newToggle.addEventListener('change', applyHideDone);
+          applyHideDone();
+        }
+      }).catch(function(err) {
+        if (tabBody) { tabBody.style.opacity = ''; tabBody.style.pointerEvents = ''; }
+        // fallback: full reload
+        location.href = 'driver.php?view=' + view;
+      });
+    });
+  });
 
   // ---- Fetch with timeout ----
   function fetchWithTimeout(url, opts, ms) {
