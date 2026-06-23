@@ -246,11 +246,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST['status'])) {
     if (!csrf_validate()) {
+        if ($is_ajax_request) {
+            driver_json_response(false, 'เซสชันหมดอายุ กรุณาลองใหม่');
+        }
         $message = 'เซสชันหมดอายุ กรุณาลองใหม่';
         $message_type = 'error';
-        if ($is_ajax_request) {
-            driver_json_response(false, $message, array('message_type' => $message_type));
-        }
     } else {
         $id = (int)$_POST['id'];
         $status = trim((string)$_POST['status']);
@@ -709,7 +709,6 @@ if ($selected_view === 'history') {
       document.querySelectorAll('.driver-tab').forEach(function(l){ l.classList.remove('active'); });
       link.classList.add('active');
       // update selectedView ทันทีเพื่อป้องกัน race condition
-      var prevView = selectedView;
       selectedView = view;
       FETCH_URL = 'driver.php?view=' + view;
       history.pushState(null, '', '?view=' + view);
@@ -834,7 +833,7 @@ if ($selected_view === 'history') {
     return s==='delivered'?'paid': s==='paid'?null:'delivered';
   }
   function nextLabelForStatus(s){
-    return s==='delivered'?'รับเงินแล้ว':'ส่งแล้ว';
+    return s==='delivered'?'รับเงินแล้ว': s==='paid'?'เสร็จแล้ว':'ส่งแล้ว';
   }
 
   function buildActionHtml(id, name, status){
