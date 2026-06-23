@@ -29,6 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_customer'])) {
     } else {
         $nameEsc = mysqli_real_escape_string($conn, $name);
         $phoneEsc = mysqli_real_escape_string($conn, $phone);
+        $dupRes = @mysqli_query($conn, "SELECT id FROM customers WHERE name='{$nameEsc}' LIMIT 1");
+        if ($dupRes && mysqli_num_rows($dupRes) > 0) {
+            $message = 'มีลูกค้าชื่อ "' . h($name) . '" อยู่แล้ว กรุณาตรวจสอบ';
+            $message_type = 'error';
+            goto customers_add_done;
+        }
         $roundEsc = mysqli_real_escape_string($conn, $preferredRound);
         $noteEsc = mysqli_real_escape_string($conn, $noteText);
         $mapEsc = mysqli_real_escape_string($conn, $mapUrl);
@@ -40,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_customer'])) {
         } else {
             $message = 'เพิ่มลูกค้าเรียบร้อย';
         }
+        customers_add_done:
     }
     }
 }

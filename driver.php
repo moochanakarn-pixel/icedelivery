@@ -149,8 +149,9 @@ if (isset($_SESSION['ice_saved_notice']) && is_array($_SESSION['ice_saved_notice
 
 if (isset($_GET['action']) && $_GET['action'] === 'check_order_count') {
     $todayEsc = mysqli_real_escape_string($conn, date('Y-m-d'));
-    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM orders WHERE order_date='{$todayEsc}'"));
-    driver_json_response(true, '', array('count' => (int)$row['cnt']));
+    $cntRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM orders WHERE order_date='{$todayEsc}'");
+    $row = $cntRes ? mysqli_fetch_assoc($cntRes) : null;
+    driver_json_response(true, '', array('count' => $row ? (int)$row['cnt'] : 0));
 }
 
 if (isset($_GET['action']) && $_GET['action'] === 'driver_history') {
