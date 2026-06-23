@@ -171,9 +171,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'driver_history') {
 }
 
 if (isset($_GET['action']) && $_GET['action'] === 'nearby_stores') {
-    $lat = isset($_GET['lat']) ? (float)$_GET['lat'] : 0;
-    $lng = isset($_GET['lng']) ? (float)$_GET['lng'] : 0;
-    if ($lat == 0 || $lng == 0) {
+    $lat = isset($_GET['lat']) && $_GET['lat'] !== '' ? (float)$_GET['lat'] : null;
+    $lng = isset($_GET['lng']) && $_GET['lng'] !== '' ? (float)$_GET['lng'] : null;
+    if ($lat === null || $lng === null) {
         driver_json_response(false, 'ไม่มีพิกัด GPS');
     }
     $todayEsc = mysqli_real_escape_string($conn, date('Y-m-d'));

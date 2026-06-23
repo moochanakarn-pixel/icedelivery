@@ -2,12 +2,8 @@
 define('SKIP_SCHEMA_UPDATES', true);
 include 'config.php';
 
-// ต้อง login ก่อนถึงจะ stream ได้
-if (!admin_is_logged_in() && !admin_remember_check()) {
-    http_response_code(403);
-    echo "event: error\ndata: unauthorized\n\n";
-    exit;
-}
+// ข้อมูลที่ส่งออกเป็นแค่จำนวน order รวม ไม่มีข้อมูลส่วนตัว
+// ไม่บังคับ admin login เพื่อให้คนส่งใช้งานได้
 
 set_time_limit(60);
 if (ob_get_level()) { ob_end_clean(); }
