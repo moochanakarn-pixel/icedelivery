@@ -42,31 +42,6 @@ admin_render_header('ภาพรวมหลังบ้าน', 'รวมง�
     <div class="card"><div class="stat-label">บัญชีหลังบ้าน</div><div class="stat-value"><?php echo number_format($adminUsers); ?></div></div>
 </div>
 
-<div class="grid-2">
-    <div class="card">
-        <h2>ทางลัดหน้าทำงานเดิม</h2>
-        <div class="btn-row">
-            <a class="btn btn-primary" href="../index.php">คีย์ออเดอร์</a>
-            <a class="btn btn-dark" href="../driver.php">หน้าคนส่ง</a>
-            <a class="btn btn-light" href="../report.php">รายงานหลัก</a>
-            <a class="btn btn-light" href="customers.php">ลูกค้า</a>
-            <a class="btn btn-light" href="login.php">หน้า login หลังบ้าน</a>
-            <a class="btn btn-light" href="line_richmenu.php">กำหนด LINE rich</a>
-        </div>
-        <div class="footer-note">หลังบ้านนี้ตั้งใจให้เป็นศูนย์จัดการ ส่วนหน้าทำงานเดิมยังใช้ต่อได้ตามปกติ</div>
-    </div>
-    <div class="card">
-        <h2>สิ่งที่หลังบ้านเพิ่มให้</h2>
-        <div class="list">
-            <div class="item">กำหนดสิทธิ์ LINE เหลือแค่ ครอบครัว และ แอดมิน</div>
-            <div class="item">กำหนดเมนู LINE ให้เหลือเฉพาะปุ่มที่ใช้จริง</div>
-            <div class="item">จัดการบัญชีผู้ดูแลหลังบ้านแยกจากผู้ใช้ LINE</div>
-            <div class="item">ดูภาพรวมสถิติวันนี้และงานหลังบ้านในหน้าเดียว</div>
-            <div class="item">เปลี่ยนรหัสผ่านและปรับค่าฟีเจอร์จากหลังบ้านได้</div>
-        </div>
-    </div>
-</div>
-
 <div class="grid-2" style="margin-top:16px">
     <div class="card">
         <h2>ลูกค้ายอดสูงเดือนนี้</h2>
@@ -88,13 +63,10 @@ admin_render_header('ภาพรวมหลังบ้าน', 'รวมง�
         <?php } else { ?>
             <?php foreach ($recentLineUsers as $row) { ?>
                 <div class="row">
+                    <div><strong><?php echo h($row['display_name'] !== '' ? $row['display_name'] : 'ยังไม่ทราบชื่อ'); ?></strong></div>
                     <div>
-                        <div><strong><?php echo h($row['display_name'] !== '' ? $row['display_name'] : 'ยังไม่ทราบชื่อ'); ?></strong></div>
-                        <div class="muted"><?php echo h($row['line_user_id']); ?></div>
-                    </div>
-                    <div>
-                        <div class="badge"><?php echo h($row['role']); ?></div>
-                        <div class="muted" style="margin-top:6px"><?php echo h($row['last_seen_at']); ?></div>
+                        <span class="badge"><?php echo h($row['role']); ?></span>
+                        <div class="muted" style="margin-top:4px"><?php echo h($row['last_seen_at']); ?></div>
                     </div>
                 </div>
             <?php } ?>
@@ -129,4 +101,4 @@ admin_render_header('ภาพรวมหลังบ้าน', 'รวมง�
         <div class="btn-row"><button type="submit" class="btn btn-primary">ส่งแจ้งเตือน</button></div>
     </form>
 </div>
-<?php admin_render_footer('แนะนำให้ใช้หลังบ้านนี้สำหรับงานจัดการ ส่วน rich menu ใน LINE ให้คงไว้สำหรับงานประจำวันบนมือถือ'); ?>
+<?php admin_render_footer(''); ?>
