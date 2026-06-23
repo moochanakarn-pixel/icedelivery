@@ -698,7 +698,7 @@ function admin_remember_check() {
     global $conn;
     if (admin_is_logged_in()) return true;
     $cookie = isset($_COOKIE['ice_admin_remember']) ? (string)$_COOKIE['ice_admin_remember'] : '';
-    if (strlen($cookie) < 32) return false;
+    if (strlen($cookie) < 64) return false;
     $hash = hash('sha256', $cookie);
     $hashEsc = mysqli_real_escape_string($conn, $hash);
     $res = @mysqli_query($conn, "SELECT t.id, t.user_id, u.username, u.full_name, u.role FROM admin_remember_tokens t JOIN admin_users u ON u.id = t.user_id WHERE t.token_hash = '{$hashEsc}' AND t.expires_at > NOW() AND u.is_active = 1 LIMIT 1");

@@ -2,6 +2,17 @@
 define('SKIP_SCHEMA_UPDATES', true);
 include 'config.php';
 
+// ต้อง login ก่อนถึงจะ stream ได้
+if (!admin_is_logged_in() && !admin_remember_check()) {
+    http_response_code(403);
+    echo "event: error\ndata: unauthorized\n\n";
+    exit;
+}
+
+set_time_limit(60);
+if (ob_get_level()) { ob_end_clean(); }
+ob_implicit_flush(true);
+
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');
 header('X-Accel-Buffering: no');
