@@ -237,6 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (mysqli_errno($conn)) {
         driver_json_response(false, 'บันทึกไม่สำเร็จ: ' . mysqli_error($conn));
     }
+    admin_log_action('deliver_confirm', 'ส่งของออเดอร์ ID ' . $id . ($qty !== null ? ' จำนวน ' . $qty . ' ก้อน' : ''));
     driver_json_response(true, 'บันทึกการส่งเรียบร้อย', array('status' => 'delivered', 'id' => $id));
 }
 
@@ -932,25 +933,19 @@ foreach ($outstandingGroups as $group) {
     });
   }
 
-  // ---- แจ้งเตือนออเดอร์ใหม่ (polling) ----
+  // ---- แจ้งเตือนออเดอร์ใหม่ (SSE) ----
   var newOrderBanner = document.getElementById('newOrderBanner');
-  var _initialOrderCount = -1;
-  (function initOrderCount(){
-    fetchWithTimeout('driver.php?action=check_order_count', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000)
-      .then(function(r){ return r.json(); })
-      .then(function(d){ if(d&&d.ok) _initialOrderCount = d.count; })
-      .catch(function(){});
+  (function startOrderSSE() {
+    if (!window.EventSource) return;
+    var es = new EventSource('driver_sse.php');
+    es.addEventListener('new_order', function(e) {
+      if (newOrderBanner) newOrderBanner.classList.add('show');
+    });
+    es.onerror = function() {
+      es.close();
+      setTimeout(startOrderSSE, 30000);
+    };
   })();
-  setInterval(function(){
-    fetchWithTimeout('driver.php?action=check_order_count', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}}, 15000)
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        if(d&&d.ok && _initialOrderCount >= 0 && d.count > _initialOrderCount){
-          if(newOrderBanner) newOrderBanner.classList.add('show');
-        }
-      })
-      .catch(function(){});
-  }, 120000);
 
 })();
 </script>

@@ -2,6 +2,7 @@
 include_once __DIR__ . '/_bootstrap.php';
 admin_require_login();
 $user = admin_current_user();
+if ($user['role'] !== 'admin') { set_flash_message('error', 'ไม่มีสิทธิ์เข้าถึงหน้านี้'); admin_auth_redirect('index.php'); }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_validate()) {

@@ -118,4 +118,15 @@ admin_render_header('ภาพรวมหลังบ้าน', 'รวมง�
         <?php } ?>
     <?php } ?>
 </div>
+<div class="card" style="margin-top:16px">
+    <h2>📣 ส่ง Push Notification</h2>
+    <form method="post" action="send_push.php">
+        <?php echo csrf_input(); ?>
+        <div class="form-grid">
+            <div class="field"><label>หัวข้อ</label><input class="input" type="text" name="title" placeholder="เช่น ออเดอร์ใหม่!" required></div>
+            <div class="field"><label>ข้อความ</label><input class="input" type="text" name="body" placeholder="เช่น มีออเดอร์ใหม่ 3 ร้าน" required></div>
+        </div>
+        <div class="btn-row"><button type="submit" class="btn btn-primary">ส่งแจ้งเตือน</button></div>
+    </form>
+</div>
 <?php admin_render_footer('แนะนำให้ใช้หลังบ้านนี้สำหรับงานจัดการ ส่วน rich menu ใน LINE ให้คงไว้สำหรับงานประจำวันบนมือถือ'); ?>

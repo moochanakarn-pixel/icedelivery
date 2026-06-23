@@ -14,7 +14,7 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_validate()) {
         $error = 'คำขอไม่ถูกต้อง กรุณาลองใหม่';
-    } elseif (admin_login(isset($_POST['username']) ? $_POST['username'] : '', isset($_POST['password']) ? $_POST['password'] : '', $error)) {
+    } elseif (admin_login(isset($_POST['username']) ? $_POST['username'] : '', isset($_POST['password']) ? $_POST['password'] : '', $error, isset($_POST['remember']))) {
         set_flash_message('success', 'เข้าสู่ระบบหลังบ้านเรียบร้อย');
         admin_auth_redirect('index.php');
     }
@@ -44,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label>รหัสผ่าน</label>
             <input type="password" name="password" class="input" autocomplete="current-password">
         </div>
+        <div class="field" style="margin-top:10px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="remember" value="1"> จำฉันไว้ 30 วัน</label></div>
         <div class="btn-row">
             <button type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
         </div>

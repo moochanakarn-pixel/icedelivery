@@ -299,6 +299,36 @@ function ensure_schema_updates($conn) {
     }
 
 
+    if (!table_exists($conn, 'admin_remember_tokens')) {
+        @mysqli_query($conn, "CREATE TABLE admin_remember_tokens (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            token_hash VARCHAR(64) NOT NULL,
+            expires_at DATETIME NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_token_hash (token_hash),
+            INDEX idx_user_expires (user_id, expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+    if (!table_exists($conn, 'fcm_tokens')) {
+        @mysqli_query($conn, "CREATE TABLE fcm_tokens (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            token VARCHAR(255) NOT NULL UNIQUE,
+            user_agent VARCHAR(255) NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NULL,
+            INDEX idx_fcm_token (token)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+    if (!column_exists($conn, 'activity_logs', 'actor_id')) {
+        @mysqli_query($conn, "ALTER TABLE activity_logs ADD actor_id INT NOT NULL DEFAULT 0 AFTER id");
+    }
+    if (!column_exists($conn, 'activity_logs', 'ip_address')) {
+        @mysqli_query($conn, "ALTER TABLE activity_logs ADD ip_address VARCHAR(45) NULL");
+    }
+
     if (!index_exists($conn, 'customers', 'idx_customers_round_route')) {
         @mysqli_query($conn, "CREATE INDEX idx_customers_round_route ON customers(preferred_round, route, route_order)");
     }
@@ -567,7 +597,9 @@ function quick_tools_enabled() {
 
 function admin_user_roles() {
     return array(
-        'admin' => 'แอดมิน'
+        'admin'   => 'แอดมิน',
+        'manager' => 'ผู้จัดการ',
+        'viewer'  => 'ดูอย่างเดียว',
     );
 }
 
@@ -585,7 +617,7 @@ function admin_is_logged_in() {
     return is_array($user) && !empty($user['id']);
 }
 
-function admin_login($username, $password, &$errorMessage) {
+function admin_login($username, $password, &$errorMessage, $remember = false) {
     global $conn;
 
     $username = trim((string)$username);
@@ -622,12 +654,17 @@ function admin_login($username, $password, &$errorMessage) {
     $now = mysqli_real_escape_string($conn, now_datetime());
     @mysqli_query($conn, "UPDATE admin_users SET last_login_at = '{$now}', updated_at = '{$now}' WHERE id = {$id} LIMIT 1");
     admin_log_action('admin_login', 'เข้าสู่ระบบหลังบ้าน');
+    if ($remember) {
+        admin_remember_set((int)$row['id']);
+    }
     return true;
 }
 
 function admin_logout() {
     if (admin_is_logged_in()) {
         admin_log_action('admin_logout', 'ออกจากระบบหลังบ้าน');
+        $user = admin_current_user();
+        if ($user) admin_remember_clear((int)$user['id']);
     }
     unset($_SESSION['ice_admin_user']);
     $_SESSION = array();
@@ -640,8 +677,58 @@ function admin_logout() {
     }
 }
 
+function admin_remember_token_generate() {
+    return function_exists('random_bytes') ? bin2hex(random_bytes(32)) : bin2hex(openssl_random_pseudo_bytes(32));
+}
+
+function admin_remember_set($userId) {
+    global $conn;
+    $token = admin_remember_token_generate();
+    $hash = hash('sha256', $token);
+    $hashEsc = mysqli_real_escape_string($conn, $hash);
+    $expiry = date('Y-m-d H:i:s', strtotime('+30 days'));
+    $expiryEsc = mysqli_real_escape_string($conn, $expiry);
+    @mysqli_query($conn, "DELETE FROM admin_remember_tokens WHERE user_id={$userId} AND expires_at < NOW()");
+    @mysqli_query($conn, "INSERT INTO admin_remember_tokens(user_id, token_hash, expires_at) VALUES({$userId}, '{$hashEsc}', '{$expiryEsc}')");
+    $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+    setcookie('ice_admin_remember', $token, time() + (86400 * 30), '/', '', $isSecure, true);
+}
+
+function admin_remember_check() {
+    global $conn;
+    if (admin_is_logged_in()) return true;
+    $cookie = isset($_COOKIE['ice_admin_remember']) ? (string)$_COOKIE['ice_admin_remember'] : '';
+    if (strlen($cookie) < 32) return false;
+    $hash = hash('sha256', $cookie);
+    $hashEsc = mysqli_real_escape_string($conn, $hash);
+    $res = @mysqli_query($conn, "SELECT t.id, t.user_id, u.username, u.full_name, u.role FROM admin_remember_tokens t JOIN admin_users u ON u.id = t.user_id WHERE t.token_hash = '{$hashEsc}' AND t.expires_at > NOW() AND u.is_active = 1 LIMIT 1");
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    if (!$row) return false;
+    $tokenId = (int)$row['id'];
+    $newToken = admin_remember_token_generate();
+    $newHash = mysqli_real_escape_string($conn, hash('sha256', $newToken));
+    $newExpiry = mysqli_real_escape_string($conn, date('Y-m-d H:i:s', strtotime('+30 days')));
+    @mysqli_query($conn, "UPDATE admin_remember_tokens SET token_hash='{$newHash}', expires_at='{$newExpiry}' WHERE id={$tokenId}");
+    $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+    setcookie('ice_admin_remember', $newToken, time() + (86400 * 30), '/', '', $isSecure, true);
+    if (function_exists('session_regenerate_id')) @session_regenerate_id(true);
+    $_SESSION['ice_admin_user'] = array(
+        'id' => (int)$row['user_id'],
+        'username' => (string)$row['username'],
+        'full_name' => (string)$row['full_name'],
+        'role' => (string)$row['role'],
+    );
+    return true;
+}
+
+function admin_remember_clear($userId) {
+    global $conn;
+    @mysqli_query($conn, "DELETE FROM admin_remember_tokens WHERE user_id={$userId}");
+    setcookie('ice_admin_remember', '', time() - 86400, '/', '', false, true);
+}
+
 function admin_require_login() {
-    if (!admin_is_logged_in()) {
+    if (!admin_is_logged_in() && !admin_remember_check()) {
         admin_auth_redirect('login.php');
     }
 }
@@ -682,23 +769,28 @@ function admin_update_own_password($userId, $currentPassword, $newPassword, &$er
     return true;
 }
 
-function admin_log_action($actionKey, $details) {
+function admin_log_action($actionKey, $details = '') {
     global $conn;
     if (!table_exists($conn, 'activity_logs')) {
         return false;
     }
-
     $user = admin_current_user();
-    $actorName = $user ? ((string)$user['username']) : 'system';
+    $actorName = $user ? (string)($user['full_name'] !== '' ? $user['full_name'] : $user['username']) : 'system';
+    $actorId = $user ? (int)$user['id'] : 0;
     $actorType = $user ? 'admin' : 'system';
-    $actionEsc = mysqli_real_escape_string($conn, (string)$actionKey);
-    $detailsEsc = mysqli_real_escape_string($conn, (string)$details);
-    $actorNameEsc = mysqli_real_escape_string($conn, $actorName);
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? (string)$_SERVER['REMOTE_ADDR'] : '';
+    $safeActor = mysqli_real_escape_string($conn, $actorName);
+    $safeKey = mysqli_real_escape_string($conn, (string)$actionKey);
+    $safeDetails = mysqli_real_escape_string($conn, (string)$details);
+    $safeIp = mysqli_real_escape_string($conn, $ip);
     $actorTypeEsc = mysqli_real_escape_string($conn, $actorType);
     $now = mysqli_real_escape_string($conn, now_datetime());
-
+    if (column_exists($conn, 'activity_logs', 'actor_id') && column_exists($conn, 'activity_logs', 'ip_address')) {
+        return @mysqli_query($conn, "INSERT INTO activity_logs(actor_id, actor_name, actor_type, action_key, details, ip_address, created_at)
+            VALUES({$actorId}, '{$safeActor}', '{$actorTypeEsc}', '{$safeKey}', '{$safeDetails}', '{$safeIp}', '{$now}')");
+    }
     return @mysqli_query($conn, "INSERT INTO activity_logs(actor_type, actor_name, action_key, details, created_at)
-        VALUES('{$actorTypeEsc}', '{$actorNameEsc}', '{$actionEsc}', '{$detailsEsc}', '{$now}')");
+        VALUES('{$actorTypeEsc}', '{$safeActor}', '{$safeKey}', '{$safeDetails}', '{$now}')");
 }
 
 function set_flash_message($type, $message) {

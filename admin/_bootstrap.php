@@ -68,6 +68,11 @@ function admin_render_header($title, $subtitle) {
     $nav     = admin_nav_items();
     $current = admin_current_page_name();
     $flash   = consume_flash_message();
+    $userRole = $user ? (string)$user['role'] : '';
+    $restrictedPages = array();
+    if ($userRole === 'viewer') {
+        $restrictedPages = array('admin_users.php', 'settings.php', 'line_richmenu.php', 'line_users.php');
+    }
     // ใช้ strtoupper/substr แทน mb_ เพื่อรองรับ PHP ที่ไม่เปิด mbstring
     $initials = 'A';
     if ($user) {
@@ -104,6 +109,7 @@ function admin_render_header($title, $subtitle) {
       <?php foreach ($group['items'] as $file => $info):
         $basename = basename((string)$file);
         $isActive = $basename === $current;
+        if (in_array($basename, $restrictedPages, true)) continue;
       ?>
         <a href="<?php echo h($file); ?>"
            class="nav-item<?php echo $isActive ? ' active' : ''; ?>">
