@@ -100,7 +100,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $rowRes = mysqli_query($conn, "SELECT name FROM customers WHERE id={$customerId} LIMIT 1");
         $row = $rowRes ? mysqli_fetch_assoc($rowRes) : null;
-        mysqli_query($conn, "DELETE FROM order_items WHERE order_id IN (SELECT id FROM (SELECT id FROM orders WHERE customer_id={$customerId}) x)");
+        $orderIdsRes = mysqli_query($conn, "SELECT id FROM orders WHERE customer_id={$customerId}");
+        $orderIds = array();
+        if ($orderIdsRes) { while ($r = mysqli_fetch_assoc($orderIdsRes)) { $orderIds[] = (int)$r['id']; } }
+        if ($orderIds) { mysqli_query($conn, "DELETE FROM order_items WHERE order_id IN (" . implode(',', $orderIds) . ")"); }
         mysqli_query($conn, "DELETE FROM orders WHERE customer_id={$customerId}");
         mysqli_query($conn, "DELETE FROM last_prices WHERE customer_id={$customerId}");
         $ok = mysqli_query($conn, "DELETE FROM customers WHERE id={$customerId} LIMIT 1");
