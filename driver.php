@@ -1,4 +1,6 @@
 <?php
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
 include 'config.php';
 
 $message = '';
@@ -623,7 +625,8 @@ if ($selected_view === 'history') {
     <?php } ?>
     <?php if ($is_ajax_tab) {
         $tabHtml = ob_get_clean(); // inner buffer (tab content only)
-        ob_end_clean();            // outer buffer (full page HTML junk)
+        // clean all remaining buffers (incl. config.php's gzip buffer)
+        while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(array(
             'ok' => true,
