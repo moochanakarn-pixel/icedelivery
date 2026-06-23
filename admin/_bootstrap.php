@@ -84,15 +84,12 @@ function admin_render_header($title, $subtitle) {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title><?php echo h($title); ?> • Admin</title>
 <?php $ab = is_file(dirname(__DIR__) . '/assets/admin.css') ? '../assets' : 'assets'; ?>
-<link rel="stylesheet" href="<?php echo h($ab); ?>/admin.css?v=20260419">
+<link rel="stylesheet" href="<?php echo h($ab); ?>/admin.css?v=20260623">
 </head>
 <body>
 
-<!-- ===== OVERLAY (mobile) ===== -->
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
-
-<!-- ===== SIDEBAR ===== -->
-<aside class="sidebar" id="sidebar">
+<!-- ===== SIDEBAR (desktop/tablet) ===== -->
+<aside class="sidebar">
   <div class="sidebar-logo">
     <div class="sidebar-logo-icon">❄</div>
     <div>
@@ -109,8 +106,7 @@ function admin_render_header($title, $subtitle) {
         $isActive = $basename === $current;
       ?>
         <a href="<?php echo h($file); ?>"
-           class="nav-item<?php echo $isActive ? ' active' : ''; ?>"
-           onclick="closeSidebar()">
+           class="nav-item<?php echo $isActive ? ' active' : ''; ?>">
           <span class="nav-icon"><?php echo admin_nav_icon($info['icon']); ?></span>
           <span class="nav-label"><?php echo h($info['label']); ?></span>
         </a>
@@ -134,14 +130,11 @@ function admin_render_header($title, $subtitle) {
 </aside>
 
 <!-- ===== MAIN AREA ===== -->
-<div class="admin-main" id="adminMain">
+<div class="admin-main">
 
   <!-- TOPBAR -->
   <header class="admin-topbar">
     <div class="topbar-left">
-      <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="เมนู">
-        <span></span><span></span><span></span>
-      </button>
       <div class="topbar-titles">
         <h1 class="topbar-title"><?php echo h($title); ?></h1>
         <p class="topbar-sub"><?php echo h($subtitle); ?></p>
@@ -165,6 +158,16 @@ function admin_render_header($title, $subtitle) {
 }
 
 function admin_render_footer($note) {
+    $nav     = admin_nav_items();
+    $current = admin_current_page_name();
+    // เลือก 5 เมนูหลักสำหรับ bottom nav มือถือ
+    $bottomItems = array(
+        'index.php'        => array('icon' => 'grid',     'label' => 'ภาพรวม'),
+        'customers.php'    => array('icon' => 'users',    'label' => 'ลูกค้า'),
+        '../index.php'     => array('icon' => 'edit',     'label' => 'คีย์'),
+        '../driver.php'    => array('icon' => 'truck',    'label' => 'คนส่ง'),
+        'settings.php'     => array('icon' => 'settings', 'label' => 'ตั้งค่า'),
+    );
 ?>
     <?php if ($note !== ''): ?>
       <p class="footer-note"><?php echo h($note); ?></p>
@@ -172,24 +175,23 @@ function admin_render_footer($note) {
   </div><!-- /.admin-content -->
 </div><!-- /.admin-main -->
 
-<script>
-function toggleSidebar(){
-  var s=document.getElementById('sidebar');
-  var o=document.getElementById('sidebarOverlay');
-  var open=s.classList.toggle('is-open');
-  o.classList.toggle('is-open', open);
-  document.body.classList.toggle('sidebar-open', open);
-}
-function closeSidebar(){
-  document.getElementById('sidebar').classList.remove('is-open');
-  document.getElementById('sidebarOverlay').classList.remove('is-open');
-  document.body.classList.remove('sidebar-open');
-}
-// ปิด sidebar เมื่อกด Escape
-document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeSidebar(); });
-</script>
+<!-- ===== BOTTOM NAV (mobile only) ===== -->
+<nav class="admin-bottom-nav">
+  <?php foreach ($bottomItems as $file => $info):
+    $basename = basename((string)$file);
+    $isActive = $basename === $current;
+  ?>
+  <a href="<?php echo h($file); ?>" class="<?php echo $isActive ? 'active' : ''; ?>">
+    <?php echo admin_nav_icon($info['icon']); ?>
+    <span><?php echo h($info['label']); ?></span>
+  </a>
+  <?php endforeach; ?>
+</nav>
+
 </body>
 </html>
+<?php
+}
 <?php
 }
 ?>
