@@ -317,3 +317,85 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .sticky-actions { width: 100% !important; }
   .sticky-actions .btn { width: 100% !important; }
 }
+
+/* ---- Deliver Confirmation Modal ---- */
+.deliver-modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.65);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.deliver-modal-box {
+  background: var(--m-card, #1a2035);
+  border-radius: 18px 18px 0 0;
+  padding: 20px 18px 32px;
+  width: 100%; max-width: 480px;
+  box-shadow: 0 -4px 32px rgba(0,0,0,.5);
+}
+.deliver-modal-title {
+  font-size: 1.05rem; font-weight: 700;
+  color: var(--m-text, #e2e8f0);
+  margin-bottom: 16px;
+}
+.deliver-label {
+  display: block; font-size: .85rem;
+  color: var(--m-sub, #94a3b8); margin-bottom: 6px;
+}
+.deliver-optional { font-weight: 400; opacity: .7; }
+.deliver-input {
+  width: 100%; padding: 12px 14px; font-size: 1.1rem;
+  background: var(--m-bg2, #161b22);
+  border: 1.5px solid var(--m-border, #2a3650);
+  border-radius: 10px; color: var(--m-text, #e2e8f0);
+  box-sizing: border-box;
+}
+.deliver-camera-btn {
+  display: block; padding: 11px 14px; text-align: center;
+  background: var(--m-bg2, #161b22);
+  border: 1.5px dashed var(--m-border, #2a3650);
+  border-radius: 10px; color: var(--m-accent, #60a5fa);
+  cursor: pointer; font-size: .95rem;
+}
+.deliver-photo-clear {
+  display: block; margin-top: 6px; font-size: .8rem;
+  color: var(--m-danger, #ef4444); background: none;
+  border: none; cursor: pointer; padding: 0;
+}
+.deliver-gps-status {
+  margin-top: 10px; font-size: .8rem;
+  color: var(--m-muted, #64748b);
+}
+.deliver-modal-actions {
+  display: flex; gap: 10px; margin-top: 18px;
+}
+.deliver-modal-actions .btn { flex: 1; }
+
+/* ---- GPS Nearby ---- */
+.driver-nearby-wrap {
+  padding: 0 0 8px;
+}
+.driver-nearby-result {
+  margin-top: 8px; padding: 12px;
+  background: var(--m-card, #1a2035);
+  border: 1.5px solid var(--m-border, #2a3650);
+  border-radius: 12px;
+}
+.driver-nearby-title {
+  font-size: .85rem; font-weight: 600;
+  color: var(--m-sub, #94a3b8); margin-bottom: 8px;
+}
+.driver-nearby-empty {
+  font-size: .9rem; color: var(--m-muted, #64748b); text-align: center;
+}
+.driver-nearby-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 0; border-bottom: 1px solid var(--m-border, #2a3650);
+  font-size: .9rem; color: var(--m-text, #e2e8f0);
+}
+.driver-nearby-item:last-child { border-bottom: none; }
+.driver-nearby-name { flex: 1; font-weight: 600; }
+.driver-nearby-dist { color: var(--m-muted, #64748b); font-size: .8rem; }
+.driver-nearby-status {
+  font-size: .78rem; padding: 2px 8px; border-radius: 20px;
+  background: var(--m-bg2, #161b22);
+  color: var(--m-sub, #94a3b8);
+}

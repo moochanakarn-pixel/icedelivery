@@ -148,6 +148,78 @@ if (isset($_SESSION['ice_saved_notice']) && is_array($_SESSION['ice_saved_notice
     if ($savedDate !== '') { $message .= ' • ' . $savedDate; }
 }
 
+if (isset($_GET['action']) && $_GET['action'] === 'nearby_stores') {
+    $lat = isset($_GET['lat']) ? (float)$_GET['lat'] : 0;
+    $lng = isset($_GET['lng']) ? (float)$_GET['lng'] : 0;
+    if ($lat == 0 || $lng == 0) {
+        driver_json_response(false, 'ไม่มีพิกัด GPS');
+    }
+    $todayEsc = mysqli_real_escape_string($conn, date('Y-m-d'));
+    $periodEsc = mysqli_real_escape_string($conn, normalize_period(isset($_GET['order_period']) ? $_GET['order_period'] : default_period_code()));
+    $latF = round($lat, 7);
+    $lngF = round($lng, 7);
+    $sql = "SELECT customers.id, customers.name, customers.latitude, customers.longitude,
+                   COALESCE(orders.status, 'no_order') AS order_status,
+                   orders.id AS order_id,
+                   ROUND(6371000 * ACOS(LEAST(1, COS(RADIANS({$latF})) * COS(RADIANS(customers.latitude)) *
+                     COS(RADIANS(customers.longitude) - RADIANS({$lngF})) +
+                     SIN(RADIANS({$latF})) * SIN(RADIANS(customers.latitude))))) AS distance_m
+            FROM customers
+            LEFT JOIN orders ON orders.customer_id = customers.id
+                AND orders.order_date = '{$todayEsc}' AND orders.order_period = '{$periodEsc}'
+            WHERE customers.latitude IS NOT NULL AND customers.longitude IS NOT NULL
+            HAVING distance_m <= 300
+            ORDER BY distance_m ASC";
+    $stores = fetch_all_rows(@mysqli_query($conn, $sql));
+    driver_json_response(true, count($stores) . ' ร้านในรัศมี 300 เมตร', array('stores' => $stores));
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'deliver_confirm') {
+    if (!csrf_validate()) {
+        driver_json_response(false, 'เซสชันหมดอายุ กรุณาลองใหม่');
+    }
+    $id = (int)(isset($_POST['id']) ? $_POST['id'] : 0);
+    $qty = isset($_POST['qty']) && $_POST['qty'] !== '' ? max(0, (int)$_POST['qty']) : null;
+    $lat = isset($_POST['lat']) && $_POST['lat'] !== '' ? (float)$_POST['lat'] : null;
+    $lng = isset($_POST['lng']) && $_POST['lng'] !== '' ? (float)$_POST['lng'] : null;
+
+    if ($id <= 0) {
+        driver_json_response(false, 'ข้อมูลไม่ถูกต้อง');
+    }
+
+    $photoSql = 'NULL';
+    if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = __DIR__ . '/uploads/delivery/';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0755, true);
+        }
+        $tmpName = $_FILES['photo']['tmp_name'];
+        $ext = 'jpg';
+        $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+        $mime = $finfo ? @finfo_file($finfo, $tmpName) : '';
+        $mimeMap = array('image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif');
+        if (isset($mimeMap[$mime])) {
+            $ext = $mimeMap[$mime];
+        }
+        $filename = $id . '_' . date('Ymd_His') . '_' . substr(bin2hex(random_bytes(4)), 0, 8) . '.' . $ext;
+        if (@move_uploaded_file($tmpName, $uploadDir . $filename)) {
+            $photoSql = "'" . mysqli_real_escape_string($conn, 'uploads/delivery/' . $filename) . "'";
+        }
+    }
+
+    $sets = array("status='delivered'", "delivered=1", "delivered_at=NOW()", "delivery_photo={$photoSql}");
+    $sets[] = $qty !== null ? "delivered_qty={$qty}" : "delivered_qty=NULL";
+    if ($lat !== null && $lng !== null && abs($lat) > 0.001 && abs($lng) > 0.001) {
+        $sets[] = "delivery_lat=" . round($lat, 7);
+        $sets[] = "delivery_lng=" . round($lng, 7);
+    }
+    @mysqli_query($conn, "UPDATE orders SET " . implode(', ', $sets) . " WHERE id={$id} AND status='pending' LIMIT 1");
+    if (mysqli_errno($conn)) {
+        driver_json_response(false, 'บันทึกไม่สำเร็จ: ' . mysqli_error($conn));
+    }
+    driver_json_response(true, 'บันทึกการส่งเรียบร้อย', array('status' => 'delivered', 'id' => $id));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST['status'])) {
     if (!csrf_validate()) {
         $message = 'เซสชันหมดอายุ กรุณาลองใหม่';
@@ -240,6 +312,13 @@ foreach ($outstandingGroups as $group) {
 
     <?php if ($message !== '') { ?><div class="notice <?php echo h($message_type); ?>"><?php echo h($message); ?></div><?php } ?>
 
+    <?php if ($selected_view === 'today') { ?>
+    <div class="driver-nearby-wrap">
+        <button id="nearbyBtn" class="btn btn-light btn-block">📍 เช็คร้านใกล้ฉัน (GPS)</button>
+        <div id="nearbyResult" style="display:none" class="driver-nearby-result"></div>
+    </div>
+    <?php } ?>
+
     <div class="driver-kpi-strip driver-kpi-strip-compact">
         <div class="driver-kpi-card">
             <div class="driver-kpi-label">รอส่ง</div>
@@ -296,8 +375,10 @@ foreach ($outstandingGroups as $group) {
                     <div class="driver-job-actions js-actions-wrap">
                         <?php if ($status === 'paid') { ?>
                             <span class="btn-disabled btn-block">เสร็จแล้ว</span>
+                        <?php } elseif ($status === 'pending') { ?>
+                            <button class="btn btn-send btn-block js-open-deliver-modal" data-id="<?php echo (int)$order['id']; ?>" data-name="<?php echo h($order['name']); ?>">ส่งแล้ว</button>
                         <?php } else { ?>
-                            <form method="post" class="status-form driver-single-action"><?php echo csrf_input(); ?><input type="hidden" name="id" value="<?php echo (int)$order['id']; ?>"><input type="hidden" name="status" value="<?php echo h($nextStatus); ?>"><button class="btn <?php echo $nextStatus === 'paid' ? 'btn-pay' : 'btn-send'; ?> js-status-btn btn-block" data-id="<?php echo (int)$order['id']; ?>" data-status="<?php echo h($nextStatus); ?>"><?php echo h($nextLabel); ?></button></form>
+                            <form method="post" class="status-form driver-single-action"><?php echo csrf_input(); ?><input type="hidden" name="id" value="<?php echo (int)$order['id']; ?>"><input type="hidden" name="status" value="<?php echo h($nextStatus); ?>"><button class="btn btn-pay js-status-btn btn-block" data-id="<?php echo (int)$order['id']; ?>" data-status="<?php echo h($nextStatus); ?>"><?php echo h($nextLabel); ?></button></form>
                         <?php } ?>
                     </div>
                 </div>
@@ -406,6 +487,29 @@ foreach ($outstandingGroups as $group) {
     <div class="driver-bottom-item"><strong id="bottomOutstanding"><?php echo number_format($outstandingAmount); ?></strong><span>ยอดค้าง</span></div>
 </div>
 <div class="toast" id="driverToast"></div>
+
+<div id="deliverModal" class="deliver-modal-overlay" style="display:none" aria-modal="true" role="dialog">
+  <div class="deliver-modal-box">
+    <div class="deliver-modal-title">ยืนยันส่งของ — <span id="deliverModalName"></span></div>
+    <div class="deliver-modal-body">
+      <label class="deliver-label">จำนวนที่ส่ง (ถัง / ก้อน)</label>
+      <input type="number" id="deliverQty" class="deliver-input" min="0" inputmode="numeric" placeholder="เช่น 10">
+      <label class="deliver-label" style="margin-top:12px">ถ่ายรูปหลักฐาน <span class="deliver-optional">(ไม่บังคับ)</span></label>
+      <label class="deliver-camera-btn" for="deliverPhoto">📷 เปิดกล้องถ่ายรูป</label>
+      <input type="file" id="deliverPhoto" accept="image/*" capture="environment" style="display:none">
+      <div id="deliverPhotoPreview" style="display:none;margin-top:8px">
+        <img id="deliverPhotoImg" style="max-width:100%;border-radius:8px;border:2px solid #e0e0e0">
+        <button id="deliverPhotoClear" class="deliver-photo-clear">✕ ลบรูป</button>
+      </div>
+      <div id="deliverGpsStatus" class="deliver-gps-status"></div>
+    </div>
+    <div class="deliver-modal-actions">
+      <button id="deliverCancelBtn" class="btn btn-light">ยกเลิก</button>
+      <button id="deliverConfirmBtn" class="btn btn-send">✔ ยืนยันส่งแล้ว</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   var csrfToken = <?php echo json_encode(csrf_token(), JSON_UNESCAPED_UNICODE); ?>;
@@ -518,6 +622,162 @@ foreach ($outstandingGroups as $group) {
       showToast(err && err.message ? err.message : 'อัปเดตไม่สำเร็จ');
     }
   });
+
+  // ---- Deliver Modal ----
+  var deliverModal = document.getElementById('deliverModal');
+  var deliverModalName = document.getElementById('deliverModalName');
+  var deliverQty = document.getElementById('deliverQty');
+  var deliverPhoto = document.getElementById('deliverPhoto');
+  var deliverPhotoImg = document.getElementById('deliverPhotoImg');
+  var deliverPhotoPreview = document.getElementById('deliverPhotoPreview');
+  var deliverPhotoClear = document.getElementById('deliverPhotoClear');
+  var deliverGpsStatus = document.getElementById('deliverGpsStatus');
+  var deliverCancelBtn = document.getElementById('deliverCancelBtn');
+  var deliverConfirmBtn = document.getElementById('deliverConfirmBtn');
+  var currentDeliverId = null;
+  var currentDeliverCard = null;
+  var deliverGpsLat = null;
+  var deliverGpsLng = null;
+
+  function openDeliverModal(id, name, card) {
+    currentDeliverId = id;
+    currentDeliverCard = card;
+    deliverModalName.textContent = name;
+    deliverQty.value = '';
+    deliverPhoto.value = '';
+    deliverPhotoImg.src = '';
+    deliverPhotoPreview.style.display = 'none';
+    deliverGpsLat = null;
+    deliverGpsLng = null;
+    deliverGpsStatus.textContent = 'กำลังดึง GPS...';
+    deliverModal.style.display = 'flex';
+    deliverQty.focus();
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        deliverGpsLat = pos.coords.latitude;
+        deliverGpsLng = pos.coords.longitude;
+        deliverGpsStatus.textContent = '📍 GPS: ' + deliverGpsLat.toFixed(5) + ', ' + deliverGpsLng.toFixed(5);
+      }, function() {
+        deliverGpsStatus.textContent = 'ไม่สามารถดึง GPS ได้';
+      }, {timeout: 8000, maximumAge: 30000});
+    } else {
+      deliverGpsStatus.textContent = 'อุปกรณ์ไม่รองรับ GPS';
+    }
+  }
+
+  function closeDeliverModal() {
+    deliverModal.style.display = 'none';
+    currentDeliverId = null;
+    currentDeliverCard = null;
+  }
+
+  deliverPhoto.addEventListener('change', function() {
+    var file = deliverPhoto.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      deliverPhotoImg.src = e.target.result;
+      deliverPhotoPreview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  deliverPhotoClear.addEventListener('click', function() {
+    deliverPhoto.value = '';
+    deliverPhotoImg.src = '';
+    deliverPhotoPreview.style.display = 'none';
+  });
+
+  deliverCancelBtn.addEventListener('click', closeDeliverModal);
+  deliverModal.addEventListener('click', function(e) {
+    if (e.target === deliverModal) closeDeliverModal();
+  });
+
+  deliverConfirmBtn.addEventListener('click', async function() {
+    if (!currentDeliverId) return;
+    deliverConfirmBtn.disabled = true;
+    deliverConfirmBtn.textContent = 'กำลังบันทึก...';
+    var fd = new FormData();
+    fd.append('action', 'deliver_confirm');
+    fd.append('csrf_token', csrfToken);
+    fd.append('id', currentDeliverId);
+    if (deliverQty.value !== '') fd.append('qty', deliverQty.value);
+    if (deliverGpsLat !== null) fd.append('lat', deliverGpsLat);
+    if (deliverGpsLng !== null) fd.append('lng', deliverGpsLng);
+    var photoFile = deliverPhoto.files[0];
+    if (photoFile) fd.append('photo', photoFile);
+    try {
+      var res = await fetch('driver.php?view=<?php echo h($selected_view); ?>&order_period=<?php echo h($selected_period); ?>', {
+        method: 'POST', body: fd,
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        credentials: 'same-origin'
+      });
+      var data = await res.json();
+      if (!res.ok || !data || !data.ok) throw new Error(data && data.message ? data.message : 'บันทึกไม่สำเร็จ');
+      if (currentDeliverCard) updateCard(currentDeliverCard, 'delivered');
+      if (currentDeliverCard) moveToNextCard(currentDeliverCard);
+      closeDeliverModal();
+      showToast('ส่งแล้วเรียบร้อย ✓');
+    } catch(err) {
+      showToast(err && err.message ? err.message : 'บันทึกไม่สำเร็จ');
+    } finally {
+      deliverConfirmBtn.disabled = false;
+      deliverConfirmBtn.textContent = '✔ ยืนยันส่งแล้ว';
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.js-open-deliver-modal');
+    if (!btn) return;
+    e.preventDefault();
+    var card = btn.closest('[data-order-id]');
+    openDeliverModal(btn.getAttribute('data-id'), btn.getAttribute('data-name'), card);
+  });
+
+  // ---- GPS Nearby Stores ----
+  var nearbyBtn = document.getElementById('nearbyBtn');
+  var nearbyResult = document.getElementById('nearbyResult');
+  if (nearbyBtn) {
+    nearbyBtn.addEventListener('click', function() {
+      if (!navigator.geolocation) { showToast('อุปกรณ์ไม่รองรับ GPS'); return; }
+      nearbyBtn.disabled = true;
+      nearbyBtn.textContent = 'กำลังดึง GPS...';
+      navigator.geolocation.getCurrentPosition(async function(pos) {
+        var lat = pos.coords.latitude;
+        var lng = pos.coords.longitude;
+        try {
+          var res = await fetch('driver.php?action=nearby_stores&lat=' + lat + '&lng=' + lng + '&order_period=<?php echo h($selected_period); ?>', {
+            credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'}
+          });
+          var data = await res.json();
+          if (!data || !data.ok) throw new Error(data.message || 'เกิดข้อผิดพลาด');
+          var stores = data.stores || [];
+          var statusLabel = {'pending':'รอส่ง','delivered':'ส่งแล้ว','paid':'เก็บเงินแล้ว','no_order':'ไม่มีออเดอร์วันนี้'};
+          if (stores.length === 0) {
+            nearbyResult.innerHTML = '<div class="driver-nearby-empty">ไม่มีร้านในรัศมี 300 เมตร</div>';
+          } else {
+            var html = '<div class="driver-nearby-title">' + data.message + '</div>';
+            stores.forEach(function(s) {
+              var sl = statusLabel[s.order_status] || s.order_status;
+              html += '<div class="driver-nearby-item"><span class="driver-nearby-name">' + (s.name || '') + '</span><span class="driver-nearby-dist">' + s.distance_m + ' ม.</span><span class="driver-nearby-status">' + sl + '</span></div>';
+            });
+            nearbyResult.innerHTML = html;
+          }
+          nearbyResult.style.display = 'block';
+        } catch(err) {
+          showToast(err.message || 'เกิดข้อผิดพลาด');
+        } finally {
+          nearbyBtn.disabled = false;
+          nearbyBtn.textContent = '📍 เช็คร้านใกล้ฉัน (GPS)';
+        }
+      }, function() {
+        showToast('ไม่สามารถดึง GPS ได้');
+        nearbyBtn.disabled = false;
+        nearbyBtn.textContent = '📍 เช็คร้านใกล้ฉัน (GPS)';
+      }, {timeout: 10000, maximumAge: 60000});
+    });
+  }
+
 })();
 </script>
 </body>

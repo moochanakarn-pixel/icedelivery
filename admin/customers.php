@@ -28,6 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $noteText = trim(isset($_POST['note_text']) ? $_POST['note_text'] : '');
         $mapUrl = $mapsEnabled ? normalize_map_input(isset($_POST['map_url']) ? $_POST['map_url'] : '') : '';
         $iceTypesCsv = 'big,small,crush,pack';
+        $latitude = isset($_POST['latitude']) && $_POST['latitude'] !== '' ? (float)$_POST['latitude'] : null;
+        $longitude = isset($_POST['longitude']) && $_POST['longitude'] !== '' ? (float)$_POST['longitude'] : null;
 
         if ($name === '') {
             admin_customer_redirect_with_flash('error', 'กรุณากรอกชื่อลูกค้า');
@@ -39,7 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $noteEsc = mysqli_real_escape_string($conn, $noteText);
         $mapEsc = mysqli_real_escape_string($conn, $mapUrl);
         $iceEsc = mysqli_real_escape_string($conn, $iceTypesCsv);
-        $ok = mysqli_query($conn, "INSERT INTO customers(name, phone, route, route_order, preferred_round, ice_types, map_url, note_text) VALUES('{$nameEsc}', '{$phoneEsc}', {$route}, {$routeOrder}, '{$roundEsc}', '{$iceEsc}', '{$mapEsc}', '{$noteEsc}')");
+        $latSql = $latitude !== null ? round($latitude, 7) : 'NULL';
+        $lngSql = $longitude !== null ? round($longitude, 7) : 'NULL';
+        $ok = mysqli_query($conn, "INSERT INTO customers(name, phone, route, route_order, preferred_round, ice_types, map_url, note_text, latitude, longitude) VALUES('{$nameEsc}', '{$phoneEsc}', {$route}, {$routeOrder}, '{$roundEsc}', '{$iceEsc}', '{$mapEsc}', '{$noteEsc}', {$latSql}, {$lngSql})");
         if ($ok) {
             admin_log_action('add_customer', 'เพิ่มลูกค้า ' . $name);
             admin_customer_redirect_with_flash('success', 'เพิ่มลูกค้าเรียบร้อย');
@@ -60,6 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $noteText = trim(isset($_POST['note_text']) ? $_POST['note_text'] : '');
         $mapUrl = $mapsEnabled ? normalize_map_input(isset($_POST['map_url']) ? $_POST['map_url'] : '') : '';
         $iceTypesCsv = 'big,small,crush,pack';
+        $latitude = isset($_POST['latitude']) && $_POST['latitude'] !== '' ? (float)$_POST['latitude'] : null;
+        $longitude = isset($_POST['longitude']) && $_POST['longitude'] !== '' ? (float)$_POST['longitude'] : null;
         if ($customerId <= 0 || $name === '') {
             admin_customer_redirect_with_flash('error', 'ข้อมูลลูกค้าไม่ถูกต้อง');
         }
@@ -69,7 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $noteEsc = mysqli_real_escape_string($conn, $noteText);
         $mapEsc = mysqli_real_escape_string($conn, $mapUrl);
         $iceEsc = mysqli_real_escape_string($conn, $iceTypesCsv);
-        $ok = mysqli_query($conn, "UPDATE customers SET name='{$nameEsc}', phone='{$phoneEsc}', route={$route}, route_order={$routeOrder}, preferred_round='{$roundEsc}', ice_types='{$iceEsc}', map_url='{$mapEsc}', note_text='{$noteEsc}' WHERE id={$customerId} LIMIT 1");
+        $latSql = $latitude !== null ? round($latitude, 7) : 'NULL';
+        $lngSql = $longitude !== null ? round($longitude, 7) : 'NULL';
+        $ok = mysqli_query($conn, "UPDATE customers SET name='{$nameEsc}', phone='{$phoneEsc}', route={$route}, route_order={$routeOrder}, preferred_round='{$roundEsc}', ice_types='{$iceEsc}', map_url='{$mapEsc}', note_text='{$noteEsc}', latitude={$latSql}, longitude={$lngSql} WHERE id={$customerId} LIMIT 1");
         if ($ok) {
             admin_log_action('save_customer', 'อัปเดตลูกค้า ID ' . $customerId);
             admin_customer_redirect_with_flash('success', 'บันทึกลูกค้าเรียบร้อย', http_build_query(array('q' => isset($_GET['q']) ? $_GET['q'] : '')));
@@ -130,6 +138,8 @@ admin_render_header('ลูกค้า', 'เพิ่ม แก้ไข แ�
             <?php if ($roundsEnabled) { ?><div class="field"><label>รอบประจำ</label><select class="select" name="preferred_round"><?php foreach ($roundOptions as $code => $label) { ?><option value="<?php echo h($code); ?>"><?php echo h($label); ?></option><?php } ?></select></div><?php } ?>
             <?php if ($mapsEnabled) { ?><div class="field"><label>แผนที่</label><input class="input" type="text" name="map_url"></div><?php } ?>
             <div class="field"><label>หมายเหตุ</label><input class="input" type="text" name="note_text"></div>
+            <div class="field"><label>Latitude (GPS)</label><input class="input" type="text" name="latitude" placeholder="เช่น 13.7563" inputmode="decimal"></div>
+            <div class="field"><label>Longitude (GPS)</label><input class="input" type="text" name="longitude" placeholder="เช่น 100.5018" inputmode="decimal"></div>
         </div>
         <div class="btn-row"><button type="submit" name="add_customer" value="1" class="btn btn-primary">เพิ่มลูกค้า</button></div>
     </form>
@@ -164,6 +174,8 @@ admin_render_header('ลูกค้า', 'เพิ่ม แก้ไข แ�
                             <?php if ($roundsEnabled) { ?><div class="field"><label>รอบประจำ</label><select class="select" name="preferred_round"><?php foreach ($roundOptions as $code => $label) { ?><option value="<?php echo h($code); ?>" <?php echo (isset($row['preferred_round']) && $row['preferred_round'] === $code) ? 'selected' : ''; ?>><?php echo h($label); ?></option><?php } ?></select></div><?php } ?>
                             <?php if ($mapsEnabled) { ?><div class="field"><label>แผนที่</label><input class="input" type="text" name="map_url" value="<?php echo h($row['map_url']); ?>"></div><?php } ?>
                             <div class="field"><label>หมายเหตุ</label><input class="input" type="text" name="note_text" value="<?php echo h($row['note_text']); ?>"></div>
+                            <div class="field"><label>Latitude (GPS)</label><input class="input" type="text" name="latitude" value="<?php echo h(isset($row['latitude']) ? $row['latitude'] : ''); ?>" placeholder="เช่น 13.7563" inputmode="decimal"></div>
+                            <div class="field"><label>Longitude (GPS)</label><input class="input" type="text" name="longitude" value="<?php echo h(isset($row['longitude']) ? $row['longitude'] : ''); ?>" placeholder="เช่น 100.5018" inputmode="decimal"></div>
                         </div>
                         <div class="btn-row">
                             <button type="submit" name="save_customer" value="1" class="btn btn-primary">บันทึก</button>

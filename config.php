@@ -262,6 +262,27 @@ function ensure_schema_updates($conn) {
     if (!column_exists($conn, 'customers', 'delivery_point_updated_at')) {
         @mysqli_query($conn, "ALTER TABLE customers ADD delivery_point_updated_at DATETIME NULL");
     }
+    if (!column_exists($conn, 'customers', 'latitude')) {
+        @mysqli_query($conn, "ALTER TABLE customers ADD latitude DECIMAL(10,7) NULL");
+    }
+    if (!column_exists($conn, 'customers', 'longitude')) {
+        @mysqli_query($conn, "ALTER TABLE customers ADD longitude DECIMAL(10,7) NULL");
+    }
+    if (!column_exists($conn, 'orders', 'delivered_qty')) {
+        @mysqli_query($conn, "ALTER TABLE orders ADD delivered_qty INT NULL");
+    }
+    if (!column_exists($conn, 'orders', 'delivery_photo')) {
+        @mysqli_query($conn, "ALTER TABLE orders ADD delivery_photo VARCHAR(255) NULL");
+    }
+    if (!column_exists($conn, 'orders', 'delivery_lat')) {
+        @mysqli_query($conn, "ALTER TABLE orders ADD delivery_lat DECIMAL(10,7) NULL");
+    }
+    if (!column_exists($conn, 'orders', 'delivery_lng')) {
+        @mysqli_query($conn, "ALTER TABLE orders ADD delivery_lng DECIMAL(10,7) NULL");
+    }
+    if (!column_exists($conn, 'orders', 'delivered_at')) {
+        @mysqli_query($conn, "ALTER TABLE orders ADD delivered_at DATETIME NULL");
+    }
 
 
     $preferredRoundMeta = @mysqli_fetch_assoc(@mysqli_query($conn, "SHOW COLUMNS FROM customers LIKE 'preferred_round'"));
