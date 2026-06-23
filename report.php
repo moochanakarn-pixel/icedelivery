@@ -26,14 +26,6 @@ $today_customers = get_sum_value($conn, "SELECT COUNT(DISTINCT customer_id) AS t
 $paid_orders = get_sum_value($conn, "SELECT COUNT(*) AS total FROM orders WHERE order_date = '{$today}' AND status = 'paid'");
 
 
-$period_summary = fetch_all_rows(mysqli_query($conn, "
-    SELECT orders.order_period, COUNT(*) AS total_orders, COALESCE(SUM(order_items.qty * order_items.price), 0) AS total_amount
-    FROM orders
-    LEFT JOIN order_items ON order_items.order_id = orders.id
-    WHERE orders.order_date = '{$today}'
-    GROUP BY orders.order_period
-    ORDER BY " . orders_period_order_sql('orders.order_period') . "
-"));
 
 $customer_ranking = fetch_all_rows(mysqli_query($conn, "
     SELECT customers.name, COALESCE(SUM(order_items.qty * order_items.price), 0) AS total
@@ -142,21 +134,6 @@ $line_summary_liff_id = defined('LINE_REPORT_SHARE_LIFF_ID') ? trim((string)LINE
         <div class="summary-share-box" id="lineSummaryPreview"><?php echo nl2br(h($line_summary_text)); ?></div>
     </div>
 
-    <?php if (rounds_enabled()) { ?>
-    <div class="card section" style="margin-top:16px">
-        <h2>🕒 สรุปรอบส่งวันนี้</h2>
-        <?php if (!$period_summary) { ?>
-            <div class="empty">ยังไม่มีข้อมูล</div>
-        <?php } else { ?>
-            <?php foreach ($period_summary as $row) { ?>
-                <div class="list-row">
-                    <div><?php echo h(get_period_label($row['order_period'])); ?></div>
-                    <div><strong><?php echo number_format($row['total_orders']); ?></strong> รายการ · <strong><?php echo number_format($row['total_amount']); ?></strong> บาท</div>
-                </div>
-            <?php } ?>
-        <?php } ?>
-    </div>
-    <?php } ?>
 
     <?php if (!$is_today_view) { ?>
     <div class="card section" style="margin-top:16px">

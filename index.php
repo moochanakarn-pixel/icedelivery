@@ -3,13 +3,12 @@ include 'config.php';
 
 $message = '';
 $message_type = 'success';
-$periods = order_periods();
 $has_last_prices = table_exists($conn, 'last_prices');
 $has_delivery_note_column = column_exists($conn, 'orders', 'delivery_note');
 
 $selected_date = isset($_REQUEST['order_date']) ? $_REQUEST['order_date'] : date('Y-m-d');
 $selected_date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $selected_date) ? $selected_date : date('Y-m-d');
-$selected_period = normalize_period(isset($_REQUEST['order_period']) ? $_REQUEST['order_period'] : default_period_code());
+$selected_period = 'all_day';
 
 
 $is_ajax_save = (
@@ -28,14 +27,10 @@ $is_ajax_list = (
 
 if (isset($_GET['saved']) && (string)$_GET['saved'] === '1') {
     $savedCount = (int)(isset($_GET['saved_count']) ? $_GET['saved_count'] : 0);
-    $savedPeriod = (string)(isset($_GET['saved_period']) ? $_GET['saved_period'] : $selected_period);
     $savedDate = (string)(isset($_GET['saved_date']) ? $_GET['saved_date'] : $selected_date);
     $message = 'บันทึกออเดอร์เรียบร้อย';
     if ($savedCount > 0) {
         $message .= ' ' . number_format($savedCount) . ' ร้าน';
-    }
-    if ($savedPeriod !== '') {
-        $message .= ' • ' . get_period_label($savedPeriod);
     }
     if ($savedDate !== '') {
         $message .= ' • ' . $savedDate;
@@ -86,7 +81,7 @@ function ajax_json_response($ok, $message, $extra = array()) {
 function render_index_order_rows($customers, $last_prices, $existing_order_notes) {
     ob_start();
     if (!$customers) {
-        echo '<div class="empty">' . h(rounds_enabled() ? 'ไม่พบลูกค้าในรอบนี้' : 'ไม่พบลูกค้า') . '</div>';
+        echo '<div class="empty">ไม่พบลูกค้า</div>';
     } else {
         echo '<div class="list-shell">';
         echo '<div class="list-head"><div>ลูกค้า</div><div>ราคา</div><div>หมายเหตุส่งของ</div></div>';
@@ -134,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_orders'])) {
 
         $posted_prices = $_POST['price'];
         $posted_notes = isset($_POST['delivery_note']) && is_array($_POST['delivery_note']) ? $_POST['delivery_note'] : array();
-        $save_period = normalize_period(isset($_POST['order_period']) ? $_POST['order_period'] : $selected_period);
+        $save_period = 'all_day';
         $safe_date = mysqli_real_escape_string($conn, $selected_date);
         $safe_period = mysqli_real_escape_string($conn, $save_period);
         $saved_count = 0;
@@ -158,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_orders'])) {
 
             $existing_orders = array();
             if ($posted_customer_ids) {
-                $existing_res = mysqli_query($conn, "SELECT id, customer_id FROM orders WHERE order_date='{$safe_date}' AND order_period='{$safe_period}' AND customer_id IN (" . implode(',', $posted_customer_ids) . ")");
+                $existing_res = mysqli_query($conn, "SELECT id, customer_id FROM orders WHERE order_date='{$safe_date}' AND order_period='{$safe_period}' AND customer_id IN (" . implode(',', $posted_customer_ids) . ") FOR UPDATE");
                 if ($existing_res === false) {
                     $has_db_error = true;
                     $db_error_message = mysqli_error($conn);
@@ -262,9 +257,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_orders'])) {
             if ($saved_count > 0) {
                 $message = 'บันทึกออเดอร์เรียบร้อย';
                 $message .= ' ' . number_format($saved_count) . ' ร้าน';
-                if ($save_period !== '') {
-                    $message .= ' • ' . get_period_label($save_period);
-                }
                 if ($selected_date !== '') {
                     $message .= ' • ' . $selected_date;
                 }
@@ -302,16 +294,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_orders'])) {
 $save_token = refresh_order_save_token();
 $line_summary_liff_id = defined('LINE_REPORT_SHARE_LIFF_ID') ? trim((string)LINE_REPORT_SHARE_LIFF_ID) : '';
 
-$where = array('1=1');
-$customer_sql = "SELECT * FROM customers WHERE " . implode(' AND ', $where) . " ORDER BY " . customers_order_by_sql();
-$all_customers = fetch_all_rows(mysqli_query($conn, $customer_sql));
-$customers = array();
-foreach ($all_customers as $customer) {
-    $preferred = isset($customer['preferred_round']) ? $customer['preferred_round'] : (rounds_enabled() ? 'morning' : 'all_day');
-    if (customer_matches_period($preferred, $selected_period)) {
-        $customers[] = $customer;
-    }
-}
+$customer_sql = "SELECT * FROM customers ORDER BY " . customers_order_by_sql();
+$customers = fetch_all_rows(mysqli_query($conn, $customer_sql));
 
 $last_prices = array();
 if ($has_last_prices && $customers) {
@@ -338,7 +322,7 @@ if ($customers) {
     }
     $ids = array_values(array_unique(array_filter($ids)));
     if ($ids && column_exists($conn, 'orders', 'delivery_note')) {
-        $note_result = mysqli_query($conn, "SELECT customer_id, delivery_note FROM orders WHERE order_date='" . mysqli_real_escape_string($conn, $selected_date) . "' AND order_period='" . mysqli_real_escape_string($conn, $selected_period) . "' AND customer_id IN (" . implode(',', $ids) . ")");
+        $note_result = mysqli_query($conn, "SELECT customer_id, delivery_note FROM orders WHERE order_date='" . mysqli_real_escape_string($conn, $selected_date) . "' AND customer_id IN (" . implode(',', $ids) . ")");
         if ($note_result) {
             while ($row = mysqli_fetch_assoc($note_result)) {
                 $existing_order_notes[(int)$row['customer_id']] = (string)$row['delivery_note'];
@@ -465,20 +449,7 @@ a{text-decoration:none}
                 <button type="submit" class="btn btn-primary btn-block" id="loadListBtn">โหลดรายการ</button>
             </div>
         </div>
-        <?php if (rounds_enabled()) { ?>
-        <div class="period-tabs">
-            <?php foreach ($periods as $code => $label) { ?>
-                <label>
-                    <input type="radio" name="order_period" value="<?php echo h($code); ?>" <?php echo $selected_period === $code ? 'checked' : ''; ?> data-period-switch="1">
-                    <span><?php echo h($label); ?></span>
-                </label>
-            <?php } ?>
-        </div>
-        <div class="period-note">กำลังคีย์: <strong id="periodNoteLabel"><?php echo h(get_period_label($selected_period)); ?></strong></div>
-        <?php } else { ?>
         <input type="hidden" name="order_period" value="all_day">
-        <div class="period-note">กำลังคีย์: <strong>รวมทั้งวัน</strong></div>
-        <?php } ?>
     </form>
 </div>
 

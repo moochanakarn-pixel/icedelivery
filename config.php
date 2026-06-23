@@ -308,6 +308,9 @@ function ensure_schema_updates($conn) {
     if (!index_exists($conn, 'orders', 'idx_orders_date_customer')) {
         @mysqli_query($conn, "CREATE INDEX idx_orders_date_customer ON orders(order_date, customer_id)");
     }
+    if (!index_exists($conn, 'orders', 'idx_orders_status')) {
+        @mysqli_query($conn, "CREATE INDEX idx_orders_status ON orders(status, order_date)");
+    }
 
     if (!table_exists($conn, 'app_settings')) {
         @mysqli_query($conn, "CREATE TABLE app_settings (

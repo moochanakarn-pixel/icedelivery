@@ -12,7 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_admin_user'])) {
         $username = trim(isset($_POST['username']) ? $_POST['username'] : '');
         $fullName = trim(isset($_POST['full_name']) ? $_POST['full_name'] : '');
-        $role = isset($adminRoles[$_POST['role']]) ? $_POST['role'] : 'admin';
+        $submittedRole = isset($_POST['role']) ? (string)$_POST['role'] : '';
+        $role = isset($adminRoles[$submittedRole]) ? $submittedRole : 'admin';
         $password = trim(isset($_POST['password']) ? $_POST['password'] : '');
         if ($username === '' || $password === '' || strlen($password) < 6) {
             set_flash_message('error', 'กรอก username และ password อย่างน้อย 6 ตัวอักษร');
@@ -37,7 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['save_admin_user'])) {
         $id = (int)(isset($_POST['id']) ? $_POST['id'] : 0);
         $fullName = trim(isset($_POST['full_name']) ? $_POST['full_name'] : '');
-        $role = isset($adminRoles[$_POST['role']]) ? $_POST['role'] : 'admin';
+        $submittedRole = isset($_POST['role']) ? (string)$_POST['role'] : '';
+        $role = isset($adminRoles[$submittedRole]) ? $submittedRole : 'admin';
         $isActive = isset($_POST['is_active']) ? 1 : 0;
         $newPassword = trim(isset($_POST['new_password']) ? $_POST['new_password'] : '');
         if ($newPassword !== '' && strlen($newPassword) < 6) {

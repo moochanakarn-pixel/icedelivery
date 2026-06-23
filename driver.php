@@ -208,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 
     $photoSql = 'NULL';
-    if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+    if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK && $_FILES['photo']['size'] <= 10485760) {
         $uploadDir = __DIR__ . '/uploads/delivery/';
         if (!is_dir($uploadDir)) {
             @mkdir($uploadDir, 0755, true);
@@ -296,7 +296,8 @@ foreach ($todayOrders as $order) {
         $todayCollected += (float)$order['total_amount'];
     }
 }
-$gpsCustomerCount = (int)mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM customers WHERE latitude IS NOT NULL AND longitude IS NOT NULL"))['cnt'];
+$_gpsRes = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM customers WHERE latitude IS NOT NULL AND longitude IS NOT NULL");
+$gpsCustomerCount = $_gpsRes ? (int)(mysqli_fetch_assoc($_gpsRes)['cnt'] ?? 0) : 0;
 
 $historyOrders = array();
 if ($selected_view === 'history') {
