@@ -286,23 +286,47 @@ $view_titles = array(
 $today = date('Y-m-d');
 $tomorrow = date('Y-m-d', strtotime('+1 day'));
 // โหลดเฉพาะข้อมูลที่ tab ปัจจุบันต้องการ
-$todayOrders = driver_fetch_orders_by_date_period($conn, $today);
+$_todayEsc = mysqli_real_escape_string($conn, $today);
+$todayOrders = ($selected_view === 'today') ? driver_fetch_orders_by_date_period($conn, $today) : array();
 $tomorrowOrders = ($selected_view === 'tomorrow') ? driver_fetch_orders_by_date_period($conn, $tomorrow) : array();
 $outstandingGroups = ($selected_view === 'outstanding') ? driver_fetch_outstanding_groups($conn) : array();
 
-$todayPending   = driver_count_by_status($todayOrders, 'pending');
-$todayDelivered = driver_count_by_status($todayOrders, 'delivered');
-$todayPaid      = driver_count_by_status($todayOrders, 'paid');
-$todayTotal     = count($todayOrders);
-$todayCollected = 0;
-foreach ($todayOrders as $order) {
-    if ((string)(isset($order['status']) ? $order['status'] : 'pending') === 'paid') {
-        $todayCollected += (float)$order['total_amount'];
+if ($selected_view === 'today') {
+    $todayPending   = driver_count_by_status($todayOrders, 'pending');
+    $todayDelivered = driver_count_by_status($todayOrders, 'delivered');
+    $todayPaid      = driver_count_by_status($todayOrders, 'paid');
+    $todayTotal     = count($todayOrders);
+    $todayCollected = 0;
+    foreach ($todayOrders as $order) {
+        if ((string)(isset($order['status']) ? $order['status'] : 'pending') === 'paid') {
+            $todayCollected += (float)$order['total_amount'];
+        }
+    }
+} else {
+    // ดึง KPI strip ด้วย single JOIN query แทนการโหลด rows ทั้งหมด
+    $_todaySumRes = @mysqli_query($conn, "SELECT
+        SUM(CASE WHEN COALESCE(o.status,'pending')='pending' THEN 1 ELSE 0 END) AS cnt_pending,
+        SUM(CASE WHEN o.status='delivered' THEN 1 ELSE 0 END) AS cnt_delivered,
+        SUM(CASE WHEN o.status='paid' THEN 1 ELSE 0 END) AS cnt_paid,
+        COUNT(DISTINCT o.id) AS cnt_total,
+        COALESCE(SUM(CASE WHEN o.status='paid' THEN oi.qty*oi.price ELSE 0 END),0) AS collected
+        FROM orders o
+        LEFT JOIN order_items oi ON oi.order_id=o.id
+        WHERE o.order_date='{$_todayEsc}'");
+    if ($_todaySumRes) {
+        $_sr = mysqli_fetch_assoc($_todaySumRes);
+        $todayPending   = (int)$_sr['cnt_pending'];
+        $todayDelivered = (int)$_sr['cnt_delivered'];
+        $todayPaid      = (int)$_sr['cnt_paid'];
+        $todayTotal     = (int)$_sr['cnt_total'];
+        $todayCollected = (float)$_sr['collected'];
+    } else {
+        $todayPending = $todayDelivered = $todayPaid = $todayTotal = 0;
+        $todayCollected = 0;
     }
 }
 
 // summary สำหรับ bottom bar — index paid+order_date รองรับแล้ว
-$_todayEsc = mysqli_real_escape_string($conn, $today);
 $_outRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt, COALESCE(SUM(oi.qty*oi.price),0) AS amt FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.paid=0 AND o.order_date < '{$_todayEsc}'");
 $_outRow = $_outRes ? mysqli_fetch_assoc($_outRes) : null;
 $outstandingCount  = $_outRow ? (int)$_outRow['cnt'] : 0;
