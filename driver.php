@@ -1,5 +1,4 @@
 <?php
-define('SKIP_SCHEMA_UPDATES', true);
 include 'config.php';
 
 $message = '';
@@ -302,7 +301,7 @@ foreach ($todayOrders as $order) {
     }
 }
 
-// summary query เบาสำหรับ bottom bar — ไม่ต้อง JOIN ทั้งหมด
+// summary สำหรับ bottom bar — index paid+order_date รองรับแล้ว
 $_todayEsc = mysqli_real_escape_string($conn, $today);
 $_outRes = @mysqli_query($conn, "SELECT COUNT(*) AS cnt, COALESCE(SUM(oi.qty*oi.price),0) AS amt FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.paid=0 AND o.order_date < '{$_todayEsc}'");
 $_outRow = $_outRes ? mysqli_fetch_assoc($_outRes) : null;
