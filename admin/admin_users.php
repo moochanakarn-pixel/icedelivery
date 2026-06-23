@@ -40,6 +40,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role = isset($adminRoles[$_POST['role']]) ? $_POST['role'] : 'admin';
         $isActive = isset($_POST['is_active']) ? 1 : 0;
         $newPassword = trim(isset($_POST['new_password']) ? $_POST['new_password'] : '');
+        if ($newPassword !== '' && strlen($newPassword) < 6) {
+            set_flash_message('error', 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร');
+            admin_auth_redirect('admin_users.php');
+        }
         $safeFullName = mysqli_real_escape_string($conn, $fullName);
         $safeRole = mysqli_real_escape_string($conn, $role);
         $safeNow = mysqli_real_escape_string($conn, now_datetime());

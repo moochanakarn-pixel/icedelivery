@@ -2,10 +2,10 @@
 include_once __DIR__ . '/config.php';
 
 if (!defined('LINE_CHANNEL_ACCESS_TOKEN')) {
-    define('LINE_CHANNEL_ACCESS_TOKEN', 'W58nEUCjHOjWV3TWtO1aTmGo23jaLwkBHhHGDfnqknoggDGZonQ2b8x7NhAtco1Pe4onug6OYlmibZcjlM+T7OMe/WaJRApDIbXgVbvIHZ4+fDbppnDtENkVVtYVUWDJPVlirkV+BxsYjqKLlUo5/gdB04t89/1O/w1cDnyilFU=');
+    define('LINE_CHANNEL_ACCESS_TOKEN', defined('_LINE_CHANNEL_ACCESS_TOKEN') ? _LINE_CHANNEL_ACCESS_TOKEN : '');
 }
 if (!defined('LINE_CHANNEL_SECRET')) {
-    define('LINE_CHANNEL_SECRET', '0f42580f070eb3463e7d7fc1c5e323a1');
+    define('LINE_CHANNEL_SECRET', defined('_LINE_CHANNEL_SECRET') ? _LINE_CHANNEL_SECRET : '');
 }
 if (!defined('LINE_SITE_BASE_URL')) {
     define('LINE_SITE_BASE_URL', 'https://mcnkth.com/icedelivery');

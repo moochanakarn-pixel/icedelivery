@@ -38,7 +38,7 @@ function driver_next_action_status($status) {
         return 'paid';
     }
     if ($status === 'paid') {
-        return 'paid';
+        return null;
     }
     return 'delivered';
 }

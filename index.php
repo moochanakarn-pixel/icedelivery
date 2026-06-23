@@ -122,6 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_orders'])) {
         }
     } else {
         unset($_SESSION['ice_order_save_token']);
+        session_write_close();
 
         if (!isset($_POST['price']) || !is_array($_POST['price'])) {
             $message = 'ข้อมูลที่ส่งมาไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง';
@@ -214,12 +215,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_orders'])) {
                     $insert_sql = $has_delivery_note_column
                         ? "INSERT INTO orders(customer_id, status, order_date, order_period, delivered, paid, delivery_note) VALUES({$customer_id}, 'pending', '{$safe_date}', '{$safe_period}', 0, 0, '{$delivery_note_sql}')"
                         : "INSERT INTO orders(customer_id, status, order_date, order_period, delivered, paid) VALUES({$customer_id}, 'pending', '{$safe_date}', '{$safe_period}', 0, 0)";
-                    if (!mysqli_query($conn, $insert_sql)) {
+                    $insert_result = mysqli_query($conn, $insert_sql);
+                    if (!$insert_result) {
                         $has_db_error = true;
                         $db_error_message = mysqli_error($conn);
                         break;
                     }
-                    $order_id = mysqli_insert_id($conn);
+                    $order_id = (int)mysqli_insert_id($conn);
+                    if ($order_id <= 0) {
+                        $has_db_error = true;
+                        $db_error_message = 'ไม่สามารถสร้าง order ได้';
+                        break;
+                    }
                 }
 
                 foreach ($clean_items as $ice_code => $row) {
