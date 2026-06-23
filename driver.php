@@ -488,8 +488,9 @@ foreach ($outstandingGroups as $group) {
 </div>
 <div class="toast" id="driverToast"></div>
 
-<div id="deliverModal" class="deliver-modal-overlay" style="display:none" aria-modal="true" role="dialog">
+<div id="deliverModal" class="deliver-modal-overlay" aria-modal="true" role="dialog">
   <div class="deliver-modal-box">
+    <div class="deliver-modal-drag"></div>
     <div class="deliver-modal-title">ยืนยันส่งของ — <span id="deliverModalName"></span></div>
     <div class="deliver-modal-body">
       <label class="deliver-label">จำนวนที่ส่ง (ถัง / ก้อน)</label>
@@ -512,114 +513,125 @@ foreach ($outstandingGroups as $group) {
 
 <script>
 (function(){
+  'use strict';
+  var FETCH_URL = 'driver.php?view=<?php echo h($selected_view); ?>&order_period=<?php echo h($selected_period); ?>';
   var csrfToken = <?php echo json_encode(csrf_token(), JSON_UNESCAPED_UNICODE); ?>;
   var selectedView = <?php echo json_encode($selected_view, JSON_UNESCAPED_UNICODE); ?>;
+
+  // ---- ป้องกันกดซ้ำ global lock ----
+  var _inFlight = {};
+  function lockId(id){ _inFlight[id] = true; }
+  function unlockId(id){ delete _inFlight[id]; }
+  function isLocked(id){ return !!_inFlight[id]; }
+
+  // ---- Toast ----
   var toast = document.getElementById('driverToast');
-  var hideDoneToggle = document.getElementById('toggleHideDone');
-  function showToast(message){
-    if(!toast){return;}
-    toast.textContent = message || '';
-    toast.classList.add('show');
-    window.clearTimeout(showToast._timer);
-    showToast._timer = window.setTimeout(function(){ toast.classList.remove('show'); }, 1800);
+  var _toastTimer = null;
+  function showToast(msg, isError){
+    if(!toast) return;
+    toast.textContent = msg || '';
+    toast.className = 'toast show' + (isError ? ' toast-error' : '');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function(){ toast.className = 'toast'; }, 2800);
   }
-  function nextActionForStatus(status){
-    return status === 'delivered' ? 'paid' : (status === 'paid' ? 'paid' : 'delivered');
+
+  // ---- Helpers ----
+  function statusLabel(s){
+    return s==='paid'?'เก็บเงินแล้ว': s==='delivered'?'ส่งแล้ว':'รอส่ง';
   }
-  function nextLabelForStatus(status){
-    return status === 'delivered' ? 'รับเงินแล้ว' : (status === 'paid' ? 'เสร็จแล้ว' : 'ส่งแล้ว');
+  function nextActionForStatus(s){
+    return s==='delivered'?'paid': s==='paid'?null:'delivered';
   }
-  function statusLabel(status){
-    return status === 'paid' ? 'เก็บเงินแล้ว' : (status === 'delivered' ? 'ส่งแล้ว' : 'รอส่ง');
+  function nextLabelForStatus(s){
+    return s==='delivered'?'รับเงินแล้ว':'ส่งแล้ว';
   }
+
+  function buildActionHtml(id, name, status){
+    if(status==='paid') return '<span class="btn-done btn-block">✓ เสร็จแล้ว</span>';
+    if(status==='pending'){
+      var n = name ? name.replace(/"/g,'&quot;') : '';
+      return '<button class="btn btn-send btn-block js-open-deliver-modal" data-id="'+id+'" data-name="'+n+'">ส่งแล้ว</button>';
+    }
+    // delivered → รับเงิน
+    return '<button class="btn btn-pay btn-block js-status-btn" data-id="'+id+'" data-status="paid">รับเงินแล้ว</button>';
+  }
+
+  function setCardLoading(card, loading){
+    if(!card) return;
+    card.classList.toggle('is-updating', loading);
+    card.querySelectorAll('button').forEach(function(b){ b.disabled = loading; });
+  }
+
+  function updateCard(card, newStatus){
+    if(!card) return;
+    var id = card.getAttribute('data-order-id') || '';
+    var name = card.querySelector('.driver-job-title') ? card.querySelector('.driver-job-title').textContent : '';
+    card.setAttribute('data-status', newStatus);
+    card.classList.toggle('is-done', newStatus==='paid');
+    var badge = card.querySelector('.js-status-badge');
+    if(badge){ badge.className='status-badge status-'+newStatus+' js-status-badge'; badge.textContent=statusLabel(newStatus); }
+    var wrap = card.querySelector('.js-actions-wrap');
+    if(wrap) wrap.innerHTML = buildActionHtml(id, name, newStatus);
+    setCardLoading(card, false);
+    applyHideDone();
+    updateBottomCounts();
+  }
+
+  function moveToNextCard(card){
+    if(selectedView!=='today'||!card) return;
+    var next = card.nextElementSibling;
+    if(next && next.scrollIntoView) setTimeout(function(){ next.scrollIntoView({behavior:'smooth',block:'center'}); }, 150);
+  }
+
   function updateBottomCounts(){
     var pending = document.querySelectorAll('.driver-job-card[data-status="pending"]').length;
     var delivered = document.querySelectorAll('.driver-job-card[data-status="delivered"]').length;
     var outstanding = 0;
     document.querySelectorAll('.driver-outstanding-sum').forEach(function(el){
-      var num = parseFloat(String(el.textContent || '').replace(/[^0-9.]/g, ''));
-      if(!isNaN(num)){ outstanding += num; }
+      var n = parseFloat(String(el.textContent||'').replace(/[^0-9.]/g,''));
+      if(!isNaN(n)) outstanding += n;
     });
-    var bp = document.getElementById('bottomPending');
-    var bd = document.getElementById('bottomDelivered');
-    var bo = document.getElementById('bottomOutstanding');
-    if(bp){ bp.textContent = pending.toLocaleString('th-TH'); }
-    if(bd){ bd.textContent = delivered.toLocaleString('th-TH'); }
-    if(bo){ bo.textContent = Math.round(outstanding).toLocaleString('th-TH'); }
+    var bp=document.getElementById('bottomPending'), bd=document.getElementById('bottomDelivered'), bo=document.getElementById('bottomOutstanding');
+    if(bp) bp.textContent=pending.toLocaleString('th-TH');
+    if(bd) bd.textContent=delivered.toLocaleString('th-TH');
+    if(bo) bo.textContent=Math.round(outstanding).toLocaleString('th-TH');
   }
+
+  var hideDoneToggle = document.getElementById('toggleHideDone');
   function applyHideDone(){
-    if(!hideDoneToggle){ return; }
-    document.querySelectorAll('.driver-job-card.is-done').forEach(function(card){
-      card.style.display = hideDoneToggle.checked ? 'none' : '';
-    });
+    if(!hideDoneToggle) return;
+    document.querySelectorAll('.driver-job-card.is-done').forEach(function(c){ c.style.display=hideDoneToggle.checked?'none':''; });
   }
-  function buildSingleActionHtml(id, status){
-    if(status === 'paid'){
-      return '<span class="btn-disabled btn-block">เสร็จแล้ว</span>';
-    }
-    var nextStatus = nextActionForStatus(status);
-    var nextLabel = nextLabelForStatus(status);
-    var btnClass = nextStatus === 'paid' ? 'btn-pay' : 'btn-send';
-    return '<form method="post" class="status-form driver-single-action"><input type="hidden" name="csrf_token" value="'+ csrfToken +'"><input type="hidden" name="id" value="'+ id +'"><input type="hidden" name="status" value="'+ nextStatus +'"><button class="btn '+ btnClass +' js-status-btn btn-block" data-id="'+ id +'" data-status="'+ nextStatus +'">'+ nextLabel +'</button></form>';
-  }
-  function updateCard(card, status){
-    if(!card){ return; }
-    card.classList.remove('is-updating');
-    card.setAttribute('data-status', status);
-    if(status === 'paid'){
-      card.classList.add('is-done');
-    } else {
-      card.classList.remove('is-done');
-    }
-    var badge = card.querySelector('.js-status-badge');
-    if(badge){
-      badge.className = 'status-badge status-' + status + ' js-status-badge';
-      badge.textContent = statusLabel(status);
-    }
-    var actionsWrap = card.querySelector('.js-actions-wrap');
-    if(actionsWrap){
-      actionsWrap.innerHTML = buildSingleActionHtml(card.getAttribute('data-order-id') || '', status);
-    }
-    applyHideDone();
-    updateBottomCounts();
-  }
-  function moveToNextCard(card){
-    if(selectedView !== 'today' || !card){ return; }
-    var next = card.nextElementSibling;
-    if(next && typeof next.scrollIntoView === 'function'){
-      setTimeout(function(){ next.scrollIntoView({behavior:'smooth', block:'center'}); }, 120);
-    }
-  }
-  if(hideDoneToggle){
-    hideDoneToggle.addEventListener('change', applyHideDone);
-    applyHideDone();
-  }
+  if(hideDoneToggle){ hideDoneToggle.addEventListener('change', applyHideDone); applyHideDone(); }
+
+  // ---- ปุ่ม รับเงินแล้ว (delivered → paid) ----
   document.addEventListener('click', async function(e){
     var btn = e.target.closest('.js-status-btn');
-    if(!btn){ return; }
+    if(!btn) return;
     e.preventDefault();
-    var card = btn.closest('[data-order-id]');
     var id = btn.getAttribute('data-id');
-    var status = btn.getAttribute('data-status');
-    if(!id || !status || !card){ return; }
-    if(card.classList.contains('is-updating')){ return; }
-    card.classList.add('is-updating');
-    btn.disabled = true;
+    var newStatus = btn.getAttribute('data-status');
+    if(!id || !newStatus) return;
+    if(isLocked(id)) return;
+    var card = btn.closest('[data-order-id]');
+    lockId(id);
+    setCardLoading(card, true);
     var fd = new FormData();
     fd.append('id', id);
-    fd.append('status', status);
+    fd.append('status', newStatus);
     fd.append('csrf_token', csrfToken);
     try {
-      var res = await fetch('driver.php?view=<?php echo h($selected_view); ?>&order_period=<?php echo h($selected_period); ?>', {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'});
+      var res = await fetch(FETCH_URL, {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'});
       var data = await res.json();
-      if(!res.ok || !data || !data.ok){ throw new Error(data && data.message ? data.message : 'อัปเดตไม่สำเร็จ'); }
-      updateCard(card, status);
+      if(!res.ok||!data||!data.ok) throw new Error(data&&data.message?data.message:'อัปเดตไม่สำเร็จ');
+      updateCard(card, newStatus);
       moveToNextCard(card);
-      showToast(data.message || 'อัปเดตแล้ว');
-    } catch(err) {
-      card.classList.remove('is-updating');
-      btn.disabled = false;
-      showToast(err && err.message ? err.message : 'อัปเดตไม่สำเร็จ');
+      showToast('บันทึกเรียบร้อย ✓');
+    } catch(err){
+      setCardLoading(card, false);
+      showToast(err&&err.message?err.message:'อัปเดตไม่สำเร็จ', true);
+    } finally {
+      unlockId(id);
     }
   });
 
@@ -634,12 +646,14 @@ foreach ($outstandingGroups as $group) {
   var deliverGpsStatus = document.getElementById('deliverGpsStatus');
   var deliverCancelBtn = document.getElementById('deliverCancelBtn');
   var deliverConfirmBtn = document.getElementById('deliverConfirmBtn');
+  var _modalSubmitting = false;
   var currentDeliverId = null;
   var currentDeliverCard = null;
   var deliverGpsLat = null;
   var deliverGpsLng = null;
 
-  function openDeliverModal(id, name, card) {
+  function openDeliverModal(id, name, card){
+    if(isLocked(id)) return;
     currentDeliverId = id;
     currentDeliverCard = card;
     deliverModalName.textContent = name;
@@ -647,134 +661,140 @@ foreach ($outstandingGroups as $group) {
     deliverPhoto.value = '';
     deliverPhotoImg.src = '';
     deliverPhotoPreview.style.display = 'none';
-    deliverGpsLat = null;
-    deliverGpsLng = null;
+    deliverGpsLat = null; deliverGpsLng = null;
     deliverGpsStatus.textContent = 'กำลังดึง GPS...';
-    deliverModal.style.display = 'flex';
-    deliverQty.focus();
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(function(pos) {
+    deliverGpsStatus.className = 'deliver-gps-status';
+    _modalSubmitting = false;
+    deliverConfirmBtn.disabled = false;
+    deliverConfirmBtn.textContent = '✔ ยืนยันส่งแล้ว';
+    deliverModal.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function(){ deliverQty.focus(); }, 200);
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(function(pos){
         deliverGpsLat = pos.coords.latitude;
         deliverGpsLng = pos.coords.longitude;
-        deliverGpsStatus.textContent = '📍 GPS: ' + deliverGpsLat.toFixed(5) + ', ' + deliverGpsLng.toFixed(5);
-      }, function() {
+        deliverGpsStatus.textContent = '📍 '+deliverGpsLat.toFixed(5)+', '+deliverGpsLng.toFixed(5);
+        deliverGpsStatus.className = 'deliver-gps-status gps-ok';
+      }, function(){
         deliverGpsStatus.textContent = 'ไม่สามารถดึง GPS ได้';
-      }, {timeout: 8000, maximumAge: 30000});
+        deliverGpsStatus.className = 'deliver-gps-status gps-fail';
+      }, {timeout:8000, maximumAge:30000});
     } else {
       deliverGpsStatus.textContent = 'อุปกรณ์ไม่รองรับ GPS';
     }
   }
 
-  function closeDeliverModal() {
-    deliverModal.style.display = 'none';
+  function closeDeliverModal(){
+    if(_modalSubmitting) return;
+    deliverModal.classList.remove('is-open');
+    document.body.style.overflow = '';
     currentDeliverId = null;
     currentDeliverCard = null;
   }
 
-  deliverPhoto.addEventListener('change', function() {
+  deliverPhoto.addEventListener('change', function(){
     var file = deliverPhoto.files[0];
-    if (!file) return;
+    if(!file) return;
     var reader = new FileReader();
-    reader.onload = function(e) {
-      deliverPhotoImg.src = e.target.result;
-      deliverPhotoPreview.style.display = 'block';
-    };
+    reader.onload = function(ev){ deliverPhotoImg.src=ev.target.result; deliverPhotoPreview.style.display='block'; };
     reader.readAsDataURL(file);
   });
-
-  deliverPhotoClear.addEventListener('click', function() {
-    deliverPhoto.value = '';
-    deliverPhotoImg.src = '';
-    deliverPhotoPreview.style.display = 'none';
+  deliverPhotoClear.addEventListener('click', function(){
+    deliverPhoto.value=''; deliverPhotoImg.src=''; deliverPhotoPreview.style.display='none';
   });
-
   deliverCancelBtn.addEventListener('click', closeDeliverModal);
-  deliverModal.addEventListener('click', function(e) {
-    if (e.target === deliverModal) closeDeliverModal();
-  });
+  deliverModal.addEventListener('click', function(e){ if(e.target===deliverModal) closeDeliverModal(); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeDeliverModal(); });
 
-  deliverConfirmBtn.addEventListener('click', async function() {
-    if (!currentDeliverId) return;
+  deliverConfirmBtn.addEventListener('click', async function(){
+    if(!currentDeliverId || _modalSubmitting) return;
+    _modalSubmitting = true;
     deliverConfirmBtn.disabled = true;
     deliverConfirmBtn.textContent = 'กำลังบันทึก...';
+    lockId(currentDeliverId);
+    var savedId = currentDeliverId;
+    var savedCard = currentDeliverCard;
     var fd = new FormData();
-    fd.append('action', 'deliver_confirm');
+    fd.append('action','deliver_confirm');
     fd.append('csrf_token', csrfToken);
-    fd.append('id', currentDeliverId);
-    if (deliverQty.value !== '') fd.append('qty', deliverQty.value);
-    if (deliverGpsLat !== null) fd.append('lat', deliverGpsLat);
-    if (deliverGpsLng !== null) fd.append('lng', deliverGpsLng);
+    fd.append('id', savedId);
+    if(deliverQty.value!=='') fd.append('qty', deliverQty.value);
+    if(deliverGpsLat!==null) fd.append('lat', deliverGpsLat);
+    if(deliverGpsLng!==null) fd.append('lng', deliverGpsLng);
     var photoFile = deliverPhoto.files[0];
-    if (photoFile) fd.append('photo', photoFile);
+    if(photoFile) fd.append('photo', photoFile);
     try {
-      var res = await fetch('driver.php?view=<?php echo h($selected_view); ?>&order_period=<?php echo h($selected_period); ?>', {
-        method: 'POST', body: fd,
-        headers: {'X-Requested-With': 'XMLHttpRequest'},
-        credentials: 'same-origin'
-      });
+      var res = await fetch(FETCH_URL, {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'});
       var data = await res.json();
-      if (!res.ok || !data || !data.ok) throw new Error(data && data.message ? data.message : 'บันทึกไม่สำเร็จ');
-      if (currentDeliverCard) updateCard(currentDeliverCard, 'delivered');
-      if (currentDeliverCard) moveToNextCard(currentDeliverCard);
-      closeDeliverModal();
+      if(!res.ok||!data||!data.ok) throw new Error(data&&data.message?data.message:'บันทึกไม่สำเร็จ');
+      deliverModal.classList.remove('is-open');
+      document.body.style.overflow='';
+      currentDeliverId=null; currentDeliverCard=null;
+      updateCard(savedCard, 'delivered');
+      moveToNextCard(savedCard);
       showToast('ส่งแล้วเรียบร้อย ✓');
-    } catch(err) {
-      showToast(err && err.message ? err.message : 'บันทึกไม่สำเร็จ');
+    } catch(err){
+      showToast(err&&err.message?err.message:'บันทึกไม่สำเร็จ', true);
     } finally {
+      _modalSubmitting = false;
       deliverConfirmBtn.disabled = false;
       deliverConfirmBtn.textContent = '✔ ยืนยันส่งแล้ว';
+      unlockId(savedId);
     }
   });
 
-  document.addEventListener('click', function(e) {
+  document.addEventListener('click', function(e){
     var btn = e.target.closest('.js-open-deliver-modal');
-    if (!btn) return;
+    if(!btn) return;
     e.preventDefault();
     var card = btn.closest('[data-order-id]');
     openDeliverModal(btn.getAttribute('data-id'), btn.getAttribute('data-name'), card);
   });
 
-  // ---- GPS Nearby Stores ----
+  // ---- GPS Nearby ----
   var nearbyBtn = document.getElementById('nearbyBtn');
   var nearbyResult = document.getElementById('nearbyResult');
-  if (nearbyBtn) {
-    nearbyBtn.addEventListener('click', function() {
-      if (!navigator.geolocation) { showToast('อุปกรณ์ไม่รองรับ GPS'); return; }
+  if(nearbyBtn){
+    var _nearbyBusy = false;
+    nearbyBtn.addEventListener('click', function(){
+      if(_nearbyBusy) return;
+      if(!navigator.geolocation){ showToast('อุปกรณ์ไม่รองรับ GPS', true); return; }
+      _nearbyBusy = true;
       nearbyBtn.disabled = true;
       nearbyBtn.textContent = 'กำลังดึง GPS...';
-      navigator.geolocation.getCurrentPosition(async function(pos) {
-        var lat = pos.coords.latitude;
-        var lng = pos.coords.longitude;
+      navigator.geolocation.getCurrentPosition(async function(pos){
+        nearbyBtn.textContent = 'กำลังโหลด...';
+        var lat = pos.coords.latitude, lng = pos.coords.longitude;
         try {
-          var res = await fetch('driver.php?action=nearby_stores&lat=' + lat + '&lng=' + lng + '&order_period=<?php echo h($selected_period); ?>', {
-            credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'}
-          });
+          var res = await fetch('driver.php?action=nearby_stores&lat='+lat+'&lng='+lng+'&order_period=<?php echo h($selected_period); ?>', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}});
           var data = await res.json();
-          if (!data || !data.ok) throw new Error(data.message || 'เกิดข้อผิดพลาด');
-          var stores = data.stores || [];
-          var statusLabel = {'pending':'รอส่ง','delivered':'ส่งแล้ว','paid':'เก็บเงินแล้ว','no_order':'ไม่มีออเดอร์วันนี้'};
-          if (stores.length === 0) {
-            nearbyResult.innerHTML = '<div class="driver-nearby-empty">ไม่มีร้านในรัศมี 300 เมตร</div>';
+          if(!data||!data.ok) throw new Error(data.message||'เกิดข้อผิดพลาด');
+          var stores = data.stores||[];
+          var sl = {pending:'รอส่ง',delivered:'ส่งแล้ว',paid:'เก็บเงินแล้ว',no_order:'ไม่มีออเดอร์'};
+          var html = '<div class="driver-nearby-title">'+data.message+'</div>';
+          if(stores.length===0){
+            html += '<div class="driver-nearby-empty">ไม่มีร้านในรัศมี 300 เมตร</div>';
           } else {
-            var html = '<div class="driver-nearby-title">' + data.message + '</div>';
-            stores.forEach(function(s) {
-              var sl = statusLabel[s.order_status] || s.order_status;
-              html += '<div class="driver-nearby-item"><span class="driver-nearby-name">' + (s.name || '') + '</span><span class="driver-nearby-dist">' + s.distance_m + ' ม.</span><span class="driver-nearby-status">' + sl + '</span></div>';
+            stores.forEach(function(s){
+              html += '<div class="driver-nearby-item"><span class="driver-nearby-name">'+s.name+'</span><span class="driver-nearby-dist">'+s.distance_m+' ม.</span><span class="driver-nearby-status status-tag-'+s.order_status+'">'+(sl[s.order_status]||s.order_status)+'</span></div>';
             });
-            nearbyResult.innerHTML = html;
           }
+          nearbyResult.innerHTML = html;
           nearbyResult.style.display = 'block';
-        } catch(err) {
-          showToast(err.message || 'เกิดข้อผิดพลาด');
+        } catch(err){
+          showToast(err.message||'เกิดข้อผิดพลาด', true);
         } finally {
+          _nearbyBusy = false;
           nearbyBtn.disabled = false;
           nearbyBtn.textContent = '📍 เช็คร้านใกล้ฉัน (GPS)';
         }
-      }, function() {
-        showToast('ไม่สามารถดึง GPS ได้');
+      }, function(){
+        showToast('ไม่สามารถดึง GPS ได้', true);
+        _nearbyBusy = false;
         nearbyBtn.disabled = false;
         nearbyBtn.textContent = '📍 เช็คร้านใกล้ฉัน (GPS)';
-      }, {timeout: 10000, maximumAge: 60000});
+      }, {timeout:10000, maximumAge:60000});
     });
   }
 
