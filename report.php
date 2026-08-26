@@ -12,19 +12,45 @@ $today = date('Y-m-d');
 $today_display = date('d/m/Y', strtotime($today));
 $current_month = date('Y-m');
 $current_year = date('Y');
+$month_start = date('Y-m-01');
+$month_end   = date('Y-m-t');
+$year_start  = date('Y-01-01');
+$year_end    = date('Y-12-31');
 $report_view = isset($_GET['view']) ? trim((string)$_GET['view']) : '';
 $is_today_view = ($report_view === 'today');
 
-$today_sales = get_sum_value($conn, "SELECT SUM(order_items.qty * order_items.price) AS total FROM order_items JOIN orders ON orders.id = order_items.order_id WHERE orders.order_date = '{$today}'");
-$today_paid_sales = get_sum_value($conn, "SELECT SUM(order_items.qty * order_items.price) AS total FROM order_items JOIN orders ON orders.id = order_items.order_id WHERE orders.order_date = '{$today}' AND (orders.status = 'paid' OR orders.paid = 1)");
-$month_sales = get_sum_value($conn, "SELECT SUM(order_items.qty * order_items.price) AS total FROM order_items JOIN orders ON orders.id = order_items.order_id WHERE DATE_FORMAT(orders.order_date, '%Y-%m') = '{$current_month}'");
-$month_paid_sales = get_sum_value($conn, "SELECT SUM(order_items.qty * order_items.price) AS total FROM order_items JOIN orders ON orders.id = order_items.order_id WHERE DATE_FORMAT(orders.order_date, '%Y-%m') = '{$current_month}' AND (orders.status = 'paid' OR orders.paid = 1)");
-$year_sales = get_sum_value($conn, "SELECT SUM(order_items.qty * order_items.price) AS total FROM order_items JOIN orders ON orders.id = order_items.order_id WHERE YEAR(orders.order_date) = '{$current_year}'");
-$year_paid_sales = get_sum_value($conn, "SELECT SUM(order_items.qty * order_items.price) AS total FROM order_items JOIN orders ON orders.id = order_items.order_id WHERE YEAR(orders.order_date) = '{$current_year}' AND (orders.status = 'paid' OR orders.paid = 1)");
-$today_orders = get_sum_value($conn, "SELECT COUNT(*) AS total FROM orders WHERE order_date = '{$today}'");
-$today_customers = get_sum_value($conn, "SELECT COUNT(DISTINCT customer_id) AS total FROM orders WHERE order_date = '{$today}'");
-$paid_orders = get_sum_value($conn, "SELECT COUNT(*) AS total FROM orders WHERE order_date = '{$today}' AND status = 'paid'");
+// Single query for all revenue stats — avoids 6 round trips and uses the order_date index
+$_statsRes = mysqli_query($conn, "
+    SELECT
+        COALESCE(SUM(CASE WHEN o.order_date = '{$today}' THEN oi.qty * oi.price ELSE 0 END), 0) AS today_sales,
+        COALESCE(SUM(CASE WHEN o.order_date = '{$today}' AND (o.status='paid' OR o.paid=1) THEN oi.qty * oi.price ELSE 0 END), 0) AS today_paid_sales,
+        COALESCE(SUM(CASE WHEN o.order_date >= '{$month_start}' AND o.order_date <= '{$month_end}' THEN oi.qty * oi.price ELSE 0 END), 0) AS month_sales,
+        COALESCE(SUM(CASE WHEN o.order_date >= '{$month_start}' AND o.order_date <= '{$month_end}' AND (o.status='paid' OR o.paid=1) THEN oi.qty * oi.price ELSE 0 END), 0) AS month_paid_sales,
+        COALESCE(SUM(oi.qty * oi.price), 0) AS year_sales,
+        COALESCE(SUM(CASE WHEN o.status='paid' OR o.paid=1 THEN oi.qty * oi.price ELSE 0 END), 0) AS year_paid_sales
+    FROM orders o
+    LEFT JOIN order_items oi ON oi.order_id = o.id
+    WHERE o.order_date >= '{$year_start}' AND o.order_date <= '{$year_end}'
+");
+$_statsRow = $_statsRes ? mysqli_fetch_assoc($_statsRes) : array();
+$today_sales      = isset($_statsRow['today_sales'])      ? $_statsRow['today_sales']      : 0;
+$today_paid_sales = isset($_statsRow['today_paid_sales']) ? $_statsRow['today_paid_sales'] : 0;
+$month_sales      = isset($_statsRow['month_sales'])      ? $_statsRow['month_sales']      : 0;
+$month_paid_sales = isset($_statsRow['month_paid_sales']) ? $_statsRow['month_paid_sales'] : 0;
+$year_sales       = isset($_statsRow['year_sales'])       ? $_statsRow['year_sales']       : 0;
+$year_paid_sales  = isset($_statsRow['year_paid_sales'])  ? $_statsRow['year_paid_sales']  : 0;
 
+// Single query for today's order counts
+$_cntRes = mysqli_query($conn, "
+    SELECT COUNT(*) AS today_orders,
+           COUNT(DISTINCT customer_id) AS today_customers,
+           COALESCE(SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END), 0) AS paid_orders
+    FROM orders WHERE order_date = '{$today}'
+");
+$_cntRow = $_cntRes ? mysqli_fetch_assoc($_cntRes) : array();
+$today_orders    = isset($_cntRow['today_orders'])    ? (int)$_cntRow['today_orders']    : 0;
+$today_customers = isset($_cntRow['today_customers']) ? (int)$_cntRow['today_customers'] : 0;
+$paid_orders     = isset($_cntRow['paid_orders'])     ? (int)$_cntRow['paid_orders']     : 0;
 
 
 $customer_ranking = fetch_all_rows(mysqli_query($conn, "
@@ -32,7 +58,7 @@ $customer_ranking = fetch_all_rows(mysqli_query($conn, "
     FROM orders
     JOIN customers ON customers.id = orders.customer_id
     LEFT JOIN order_items ON order_items.order_id = orders.id
-    WHERE DATE_FORMAT(orders.order_date, '%Y-%m') = '{$current_month}'
+    WHERE orders.order_date >= '{$month_start}' AND orders.order_date <= '{$month_end}'
     GROUP BY customers.id
     ORDER BY total DESC, customers.name ASC
     LIMIT 10
@@ -179,7 +205,7 @@ $line_summary_liff_id = defined('LINE_REPORT_SHARE_LIFF_ID') ? trim((string)LINE
     }
 
     function fallbackLineShare() {
-        var shareUrl = 'https://line.me/R/msg/text/?' + encodeURIComponent(shareText);
+        var shareUrl = 'https://line.me/R/msg/text/' + encodeURIComponent(shareText);
         window.location.href = shareUrl;
     }
 
