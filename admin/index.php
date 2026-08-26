@@ -4,6 +4,8 @@ admin_require_login();
 
 $today = date('Y-m-d');
 $currentMonth = date('Y-m');
+$monthStart = date('Y-m-01');
+$monthEnd   = date('Y-m-t');
 
 function admin_scalar($sql, $field) {
     global $conn;
@@ -23,7 +25,7 @@ $monthTop = fetch_all_rows(@mysqli_query($conn, "
     FROM orders
     JOIN customers ON customers.id = orders.customer_id
     LEFT JOIN order_items ON order_items.order_id = orders.id
-    WHERE DATE_FORMAT(orders.order_date, '%Y-%m') = '{$currentMonth}'
+    WHERE orders.order_date >= '{$monthStart}' AND orders.order_date <= '{$monthEnd}'
     GROUP BY customers.id
     ORDER BY total DESC, customers.name ASC
     LIMIT 5
