@@ -32,7 +32,7 @@ $conn = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
 if (!$conn) {
     die('เชื่อมต่อฐานข้อมูลไม่สำเร็จ: ' . mysqli_connect_error());
 }
-mysqli_set_charset($conn, 'utf8');
+mysqli_set_charset($conn, 'utf8mb4');
 mysqli_report(MYSQLI_REPORT_OFF);
 
 define('DEFAULT_ENABLE_MAP_FEATURES', false);
@@ -46,7 +46,7 @@ if (!defined('LINE_REPORT_SHARE_LIFF_ID')) {
 }
 
 if (!defined('ICE_SCHEMA_VERSION')) {
-    define('ICE_SCHEMA_VERSION', '2026-06-23-1');
+    define('ICE_SCHEMA_VERSION', '2026-08-26-1');
 }
 
 function h($text) {
@@ -353,7 +353,7 @@ function ensure_schema_updates($conn) {
             setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
             setting_value VARCHAR(50) NOT NULL,
             updated_at DATETIME NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     @mysqli_query($conn, "INSERT IGNORE INTO app_settings(setting_key, setting_value, updated_at) VALUES
@@ -365,24 +365,24 @@ function ensure_schema_updates($conn) {
 
     if (!table_exists($conn, 'admin_users')) {
         @mysqli_query($conn, "CREATE TABLE admin_users (
-            id INT(11) NOT NULL AUTO_INCREMENT,
+            id INT NOT NULL AUTO_INCREMENT,
             username VARCHAR(50) NOT NULL,
             password_hash VARCHAR(255) NOT NULL,
             full_name VARCHAR(100) DEFAULT NULL,
             role VARCHAR(20) NOT NULL DEFAULT 'admin',
-            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            is_active TINYINT NOT NULL DEFAULT 1,
             created_at DATETIME NULL,
             updated_at DATETIME NULL,
             last_login_at DATETIME NULL,
             PRIMARY KEY (id),
             UNIQUE KEY uq_admin_username (username),
             KEY idx_admin_role_active (role, is_active)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     if (!table_exists($conn, 'activity_logs')) {
         @mysqli_query($conn, "CREATE TABLE activity_logs (
-            id INT(11) NOT NULL AUTO_INCREMENT,
+            id INT NOT NULL AUTO_INCREMENT,
             actor_type VARCHAR(20) DEFAULT NULL,
             actor_name VARCHAR(100) DEFAULT NULL,
             action_key VARCHAR(100) DEFAULT NULL,
@@ -391,16 +391,16 @@ function ensure_schema_updates($conn) {
             PRIMARY KEY (id),
             KEY idx_activity_created (created_at),
             KEY idx_activity_actor (actor_type, actor_name)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     if (!table_exists($conn, 'line_users')) {
         @mysqli_query($conn, "CREATE TABLE line_users (
-            id INT(11) NOT NULL AUTO_INCREMENT,
+            id INT NOT NULL AUTO_INCREMENT,
             line_user_id VARCHAR(50) NOT NULL,
             display_name VARCHAR(150) DEFAULT NULL,
             role VARCHAR(20) NOT NULL DEFAULT 'family',
-            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            is_active TINYINT NOT NULL DEFAULT 1,
             created_at DATETIME NULL,
             updated_at DATETIME NULL,
             last_seen_at DATETIME NULL,
@@ -408,7 +408,7 @@ function ensure_schema_updates($conn) {
             PRIMARY KEY (id),
             UNIQUE KEY uq_line_user_id (line_user_id),
             KEY idx_line_role_active (role, is_active)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     if (!table_exists($conn, 'line_richmenus')) {
@@ -417,12 +417,12 @@ function ensure_schema_updates($conn) {
             richmenu_id VARCHAR(100) NOT NULL,
             updated_at DATETIME NULL,
             PRIMARY KEY (role)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     if (!table_exists($conn, 'line_webhook_events')) {
         @mysqli_query($conn, "CREATE TABLE line_webhook_events (
-            id INT(11) NOT NULL AUTO_INCREMENT,
+            id INT NOT NULL AUTO_INCREMENT,
             webhook_event_id VARCHAR(100) NOT NULL,
             event_type VARCHAR(30) DEFAULT NULL,
             line_user_id VARCHAR(50) DEFAULT NULL,
@@ -431,28 +431,28 @@ function ensure_schema_updates($conn) {
             UNIQUE KEY uq_webhook_event_id (webhook_event_id),
             KEY idx_webhook_line_user (line_user_id),
             KEY idx_webhook_created (created_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     if (!table_exists($conn, 'line_menu_configs')) {
         @mysqli_query($conn, "CREATE TABLE line_menu_configs (
             role VARCHAR(20) NOT NULL,
-            layout_count INT(11) NOT NULL DEFAULT 3,
+            layout_count INT NOT NULL DEFAULT 3,
             slots_json TEXT NULL,
             updated_at DATETIME NULL,
             PRIMARY KEY (role)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     if (!table_exists($conn, 'last_prices')) {
         @mysqli_query($conn, "CREATE TABLE last_prices (
-            customer_id INT(11) NOT NULL,
+            customer_id INT NOT NULL,
             ice_type VARCHAR(20) NOT NULL,
-            price INT(11) NOT NULL DEFAULT 0,
+            price INT NOT NULL DEFAULT 0,
             updated_at DATETIME NULL,
             PRIMARY KEY (customer_id, ice_type),
             KEY idx_last_prices_updated (updated_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
     if (table_exists($conn, 'last_prices')) {
@@ -501,6 +501,20 @@ function ensure_schema_updates($conn) {
             $now = mysqli_real_escape_string($conn, now_datetime());
             @mysqli_query($conn, "INSERT INTO admin_users(username, password_hash, full_name, role, is_active, created_at, updated_at)
                 VALUES('{$username}', '{$passwordHash}', '{$fullName}', 'admin', 1, '{$now}', '{$now}')");
+        }
+    }
+
+    // Migrate existing tables to utf8mb4 for MySQL 8.4 compatibility
+    $utf8mb4Tables = array('app_settings', 'admin_users', 'activity_logs', 'line_users', 'line_richmenus', 'line_webhook_events', 'line_menu_configs', 'last_prices', 'customers', 'orders', 'order_items', 'admin_remember_tokens', 'fcm_tokens');
+    foreach ($utf8mb4Tables as $t) {
+        if (table_exists($conn, $t)) {
+            $tEsc = mysqli_real_escape_string($conn, $t);
+            $charsetRes = @mysqli_query($conn, "SELECT CCSA.character_set_name FROM information_schema.TABLES T INNER JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY CCSA ON T.TABLE_COLLATION = CCSA.collation_name WHERE T.TABLE_SCHEMA = DATABASE() AND T.TABLE_NAME = '{$tEsc}'");
+            $charsetRow = $charsetRes ? mysqli_fetch_assoc($charsetRes) : null;
+            $currentCharset = $charsetRow ? (string)$charsetRow['character_set_name'] : '';
+            if ($currentCharset !== '' && $currentCharset !== 'utf8mb4') {
+                @mysqli_query($conn, "ALTER TABLE `{$tEsc}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            }
         }
     }
 
